@@ -1,3 +1,4 @@
-class Preprocessing()
-    def __init__():
-    pass
+class Preprocessing():
+
+    def __init__(self, E_DOS):
+        self.E_DOS = E_DOS
