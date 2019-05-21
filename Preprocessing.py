@@ -17,6 +17,7 @@ class Preprocessing():
 
     def process_WAVECAR(self):
         pass
+    
 
     def process_OUTCAR(self, file_path):
         pass
