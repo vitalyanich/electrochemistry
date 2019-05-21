@@ -1,10 +1,64 @@
 from monty.re import regrep
 import itertools
+import numpy as np
+from pymatgen.io.vasp.outputs import Locpot
 
 
 class Preprocessing():
 
-    
+    def __init__(self):
+        self.efermi = None
+        self.nkpts = None
+        self.nbands = None
+        self.weights = None
+        self.eigenvalues = None
+        self.occupations = None
+        self.vacuum_lvl = None
+
+    def process_WAVECAR(self):
+        pass
+
+    def process_OUTCAR(self, file_path):
+        pass
+
+    def get_DOS(self, E_DOS):
+        pass
+
+    def get_band_eigs(self, bands):
+        pass
+
+    def get_band_occ(self, bands):
+        pass
+
+    def process_LOCPOT(self, file_path=None):
+
+        if file_path is None:
+            file_path = 'LOCPOT'
+
+        locpot = Locpot.from_file(file_path)
+        avr = locpot.get_average_along_axis(2)
+        vacuum_lvl = np.max(avr)
+
+        self.vacuum_lvl = vacuum_lvl
+
+        return vacuum_lvl
+
+    def save_all(self):
+        pass
+
+    def load(self, variable):
+
+        if object == 'all':
+            self.efermi = np.load(f'Saved_data/efermi.npy').items()
+            self.nkpts = np.load(f'Saved_data/nkpts.npy').items()
+            self.nbands = np.load(f'Saved_data/nbands.npy').items()
+            self.weights = np.load(f'Saved_data/weights.npy').items()
+            self.eigenvalues = np.load(f'Saved_data/eigenvalues.npy').items()
+            self.occupations = np.load(f'Saved_data/occupations.npy').items()
+            self.vacuum_lvl = np.load(f'Saved_data/vacuum_lvl.npy').items()
+        else:
+            class_variable = getattr(self, variable, lambda: 'Invalid variable')
+            class_variable = np.load(f'Saved_data/{variable}').items()
 
 
 class Espresso:
