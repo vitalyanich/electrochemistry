@@ -2,6 +2,7 @@ from monty.re import regrep
 import itertools
 import numpy as np
 from pymatgen.io.vasp.outputs import Locpot
+import os
 
 
 class Preprocessing():
@@ -15,23 +16,82 @@ class Preprocessing():
         self.occupations = None
         self.vacuum_lvl = None
 
-    def process_WAVECAR(self):
-        pass
-    
+    def process_WAVECAR(self, file_path):
+        """
+
+        :param file_path:
+        :return:
+        """
+
 
     def process_OUTCAR(self, file_path):
+        """
+        process OUTCAR file obtained from VASP
+        get following variables:
+        self.nkpts - number of k-points (int)
+        self.efermi - Fermi level (float)
+        self.nbands - number of bands (int)
+        self.eigenvalues - 2D np.array, eigenvalues[i][j] contains energy for i k-point and j band
+        self.occupations - 2D np.array, occupations[i][j] contains occupation for i k-point and j band
+        :param file_path: path to OUTCAR file
+        :return: nothing
+        """
+        patterns = {'nkpts': r'Found\s+(\d+)\s+irreducible\sk-points',
+                    'weights':'k-points in units of 2pi/SCALE and weight: K-Points',
+                    'efermi': 'E-fermi\s:\s+([-.\d]+)',
+                    'kpoints': r'k-point\s+(\d+)\s:\s+[-.\d]+\s+[-.\d]+\s+[-.\d]+\n'}
+        matches = regrep(file_path, patterns)
+
+        self.nkpts = int(matches['nkpts'][0][0][0])
+        self.efermi = float(matches['efermi'][0][0][0])
+        self.nbands = int(matches['kpoints'][1][1] - matches['kpoints'][0][1]-3)
+        self.eigenvalues = []
+        self.occupations = []
+
+        with open(file_path) as file:
+            lines = file.readlines()
+            for kpoint in range(self.nkpts-1):
+                self.eigenvalues.append([])
+                self.occupations.append([])
+                startline = matches['kpoints'][kpoint][1]+2
+                for i in range(startline, startline + self.nbands):
+                    self.eigenvalues[kpoint].append(float(lines[i].split()[1]))
+                    self.occupations[kpoint].append(float(lines[i].split()[2]))
+        self.eigenvalues = np.array(self.eigenvalues)
+        self.occupations = np.array(self.occupations)
+        if not os.path.exists('Saved_data'):
+            os.mkdir('Saved_data')
+        self.save('all')
+
+    def get_DOS(self, E_range, dE):
+
         pass
 
-    def get_DOS(self, E_DOS):
-        pass
+    def get_band_eigs(self, band, path_to_OUTCAR = 'OUTCAR'):
+        if self.eigenvalues == None:
+            try:
+                print("Variable is not define. Try load from file")
+                self.load('eigenvalues')
+            except:
+                print("Loading failed. Start processing OUTCAR")
+                self.process_OUTCAR(path_to_OUTCAR)
+            return self.eigenvalues[:,band]
+        else:
+            return self.eigenvalues[:,band]
 
-    def get_band_eigs(self, bands):
-        pass
+    def get_band_occ(self, band, path_to_OUTCAR = 'OUTCAR'):
+        if self.occupations == None:
+            try:
+                print("Variable is not define. Try load from file")
+                self.load('occupations')
+            except:
+                print("Loading failed. Start processing OUTCAR")
+                self.process_OUTCAR(path_to_OUTCAR)
+            return self.occupations[:,band]
+        else:
+            return self.occupations[:,band]
 
-    def get_band_occ(self, bands):
-        pass
-
-    def process_LOCPOT(self, file_path=None):
+    def     process_LOCPOT(self, file_path=None):
 
         if file_path is None:
             file_path = 'LOCPOT'
@@ -44,22 +104,30 @@ class Preprocessing():
 
         return vacuum_lvl
 
-    def save_all(self):
-        pass
-
-    def load(self, variable):
-
-        if object == 'all':
-            self.efermi = np.load(f'Saved_data/efermi.npy').items()
-            self.nkpts = np.load(f'Saved_data/nkpts.npy').items()
-            self.nbands = np.load(f'Saved_data/nbands.npy').items()
-            self.weights = np.load(f'Saved_data/weights.npy').items()
-            self.eigenvalues = np.load(f'Saved_data/eigenvalues.npy').items()
-            self.occupations = np.load(f'Saved_data/occupations.npy').items()
-            self.vacuum_lvl = np.load(f'Saved_data/vacuum_lvl.npy').items()
+    def save(self, variable='all'):
+        if variable == 'all':
+            np.save('Saved_data/efermi.npy', self.efermi)
+            np.save('Saved_data/nkpts.npy', self.nkpts)
+            np.save('Saved_data/nbands.npy', self.nbands)
+            np.save('Saved_data/weights.npy', self.weights)
+            np.save('Saved_data/eigenvalues.npy', self.eigenvalues)
+            np.save('Saved_data/occupations.npy', self.occupations)
+            np.save('Saved_data/vacuum_lvl.npy', self.vacuum_lvl)
+            print('All variables Saved')
         else:
-            class_variable = getattr(self, variable, lambda: 'Invalid variable')
-            class_variable = np.load(f'Saved_data/{variable}').items()
+            np.save('Saved_data/'+variable+'.npy', getattr(self, variable))
+
+    def load(self, variable='all'):
+        if variable == 'all':
+            self.efermi = np.load('Saved_data/efermi.npy')
+            self.nkpts = np.load('Saved_data/nkpts.npy')
+            self.nbands = np.load('Saved_data/nbands.npy')
+            self.weights = np.load('Saved_data/weights.npy')
+            self.eigenvalues = np.load('Saved_data/eigenvalues.npy')
+            self.occupations = np.load('Saved_data/occupations.npy')
+            self.vacuum_lvl = np.load('Saved_data/vacuum_lvl.npy')
+        else:
+            setattr(self, variable, np.load('Saved_data/'+str(variable)+'.npy'))
 
 
 class Espresso:
@@ -110,3 +178,9 @@ class Espresso:
     def get_band_occ(self, band):
         if type(band) is int:
             return [occ for occ in self.occupations[:, band]]
+
+if __name__=='__main__':
+    outcar_path = 'OUTCAR'
+    preprocessing = Preprocessing()
+    print(preprocessing.get_band_eigs(1))
+    #preprocessing.load('occupations')
