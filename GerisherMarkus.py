@@ -32,25 +32,25 @@ class GM:
 
         if DOS is None:
             try:
-                self.DOS = np.load('Saved_data/DOS.npy').items()
+                self.DOS = np.load('Saved_data/DOS.npy').item()
             except OSError:
                 print('File DOS.npy does not exist')
 
         if E is None:
             try:
-                self.E = np.load('Saved_data/E.npy').items()
+                self.E = np.load('Saved_data/E.npy').item()
             except OSError:
                 print('File E_DOS.npy does not exist')
 
         if efermi is None:
             try:
-                self.efermi = np.load('Saved_data/efermi.npy').items()
+                self.efermi = np.load('Saved_data/efermi.npy').item()
             except OSError:
                 print('File efermi.npy does not exist')
 
         if vacuum_lvl is None:
             try:
-                self.vacuum_lvl = np.load('Saved_data/vacuum_lvl.npy').items()
+                self.vacuum_lvl = np.load('Saved_data/vacuum_lvl.npy').item()
             except OSError:
                 print('File vacuum_lvl.npy does not exist')
 
@@ -84,7 +84,7 @@ class GM:
     @staticmethod
     def compute_sigma_EDL(C_EDL, dE_EDL):
 
-        return - C_EDL * dE_EDL
+        return C_EDL * dE_EDL
 
     @staticmethod
     def fermi_func(E, T):
@@ -128,7 +128,7 @@ class GM:
         sigmas: np.ndarray, float
             Computed values (or one value) of surface charge densities
         """
-        q_electron = 1.6e-13  # micro coulomb
+        elementary_charge = 1.6e-13  # micro coulomb
 
         if type(dE_Q_arr) is np.ndarray:
             E_1 = E_DOS - efermi  # energy range for DOS and not shifted Fermi-Dirac function
@@ -139,8 +139,8 @@ class GM:
             for dE_Q in dE_Q_arr:
                 E_2 = E_DOS - efermi - dE_Q  # energy range for shifted Fermi_Dirac function
                 y_fermi_shifted = self.fermi_func(E_2, T)
-                integrand = DOS * (y_fermi_shifted - y_fermi)
-                sigma = - (q_electron / self.sheet_area) * integrate.simps(integrand, E_1)
+                integrand = DOS * (y_fermi - y_fermi_shifted)
+                sigma = (elementary_charge / self.sheet_area) * integrate.simps(integrand, E_1)
                 sigmas.append(sigma)
 
             return sigmas
@@ -151,8 +151,8 @@ class GM:
 
             E_2 = E_DOS - efermi - dE_Q_arr  # energy range for shifted Fermi_Dirac function
             y_fermi_shifted = self.fermi_func(E_2, T)
-            integrand = DOS * (y_fermi_shifted - y_fermi)
-            sigma = - (q_electron / self.sheet_area) * integrate.simps(integrand, E_1)
+            integrand = DOS * (y_fermi - y_fermi_shifted)
+            sigma = (elementary_charge / self.sheet_area) * integrate.simps(integrand, E_1)
 
             return sigma
         else:
@@ -231,7 +231,7 @@ class GM:
 
         return E_DOS, y_fermi, y_redox
 
-    def compute_k_HET(self, mode, V_std_pot_arr, dE_eta_arr, n_jobs=1):
+    '''def compute_k_HET(self, mode, V_std_pot_arr, dE_eta_arr, n_jobs=1):
         """Compute integral k_HET using Geresher-Markus formalism
 
         Parameters:
@@ -364,4 +364,9 @@ class GM:
         df['sigma_overpot'] = sigma_overpot[:]
         df['k_HET'] = k_HET[:]
 
-        return df
+        return df'''
+
+if __name__ == '__main__':
+    a = GM()
+    #a.compute_sigma_quantum(np.arange(-1, 1, 0.1), 298, a.E_DOS, a.DOS, a.efermi)
+    a.efermi
