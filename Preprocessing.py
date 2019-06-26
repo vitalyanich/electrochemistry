@@ -2,7 +2,7 @@ from monty.re import regrep
 import itertools
 import numpy as np
 from pymatgen.io.vasp.outputs import Locpot
-#from vaspwfc import vaspwfc
+from vaspwfc import vaspwfc
 import os, sys, time
 import multiprocessing as mp
 import matplotlib.pyplot as plt
@@ -372,7 +372,7 @@ class Espresso:
 
 if __name__=='__main__':
     outcar_path = 'OUTCAR'
-    #wavecar_path = 'WAVECAR'
+    wavecar_path = 'WAVECAR'
     p = Preprocessing()
     p.process_OUTCAR('OUTCAR_2', 'Saved_data_2')
     E_arr, DOS_arr = p.get_DOS((-10.0, 5.0), 0.1)
