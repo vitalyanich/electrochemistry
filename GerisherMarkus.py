@@ -27,12 +27,13 @@ class GM:
         self.C_EDL = None
         self.T = None
         self.l = None
+        self.sheet_area = None
 
         self.E = None
         self.DOS = None
 
         self.sigma_eq = None
-        elf.dE_Q_eq = None
+        self.dE_Q_eq = None
         self.y_fermi = None
         self.y_redox = None
 
@@ -147,8 +148,32 @@ class GM:
         W_0 = (1 / np.sqrt(4 * k * T * l))
         return W_0 * np.exp(- (E + l) ** 2 / (4 * k * T * l))
 
+    def compute_C_quantum(self, dE_Q_arr):
+
+        self.check_param('T')
+        self.check_param('sheet_area')
+
+        k = 8.617e-5  # eV/K
+
+        elementary_charge = 1.6e-19  # C
+        k_1 = 1.38e-23  # J/K
+        const = (1e6 * elementary_charge ** 2) / (4 * k_1 * self.sheet_area)  # micro F * K / cm^2
+
+        if type(dE_Q_arr) is np.ndarray:
+
+            C_q_arr = []
+
+            for dE_Q in dE_Q_arr:
+                E_2 = self.E - dE_Q  # energy range for cosh function
+                integrand = (self.DOS / np.cosh(E_2 / (2 * k * self.T))) / np.cosh(E_2 / (2 * k * self.T))
+                C_q = (const / self.T) * integrate.simps(integrand, self.E)
+                C_q_arr.append(C_q)
+
+            return C_q_arr
+
     def compute_sigma_EDL(self, dE_EDL):
 
+        self.check_param('C_EDL')
         return self.C_EDL * dE_EDL
 
     def compute_sigma_quantum(self, dE_Q_arr):
@@ -166,6 +191,7 @@ class GM:
         """
 
         self.check_param('T')
+        self.check_param('sheet_area')
 
         elementary_charge = 1.6e-13  # micro coulomb
 
@@ -195,22 +221,31 @@ class GM:
         else:
             raise TypeError(f'Invalid type of dE_Q_arr: {type(dE_Q_arr)}')
 
-    def compute_distributions(self, V_std, reverse=False, dE_eta=0, SIGMA_0=0.1, ACCURACY_SIGMA=1e-3, SIGMA_RANGE=5):
+    def compute_distributions(self, V_std, reverse=False, overpot=0, SIGMA_0=0.1, ACCURACY_SIGMA=1e-3, SIGMA_RANGE=4):
+
         """Function computes Fermi-Dirac and Redox species distributions according to Gerisher-Markus formalism
 
         Parameters:
         ----------
         V_std: float
-            Standard potential of a redox pair (Volts)
-
-        dE_eta: float
-            Shift of the electrode Fermi energy due to the overpotential (eV)
+            Standard potential of a redox couple (Volts)
 
         reverse: bool, optional
             if reverse is False the process of electron transfer from electrode to the oxidized state of the
             redox particles is considered and vice versa
-        """
 
+        overpot: float, optional
+            Overpotential (Volts). It shifts the electrode Fermi energy to -|e|*overpot
+
+        SIGMA_0: float, optional
+            Initial guess for charge at equilibrium
+
+        ACCURACY_SIGMA: float, optional
+            Accuracy of charge calculation
+
+        SIGMA_RANGE: float, optional
+            It defines the minimum and maximum calculated charge
+        """
         def error_E_diff(sigma, E_diff, sigma_Q_arr):
             i_1, i_2 = self.nearest_array_indices(sigma_Q_arr, sigma)
             dE_Q = E_start + E_step * i_1
@@ -229,7 +264,7 @@ class GM:
 
         sigma_0 = SIGMA_0
 
-        E_F_redox = -4.5 - self.efermi - V_std + self.vacuum_lvl
+        E_F_redox = -4.5 - self.efermi - V_std + self.vacuum_lvl - overpot
 
         # compute equilibrium case
         result = minimize(error_E_diff, np.array([sigma_0]), args=(E_F_redox, sigma_Q_arr))
@@ -242,12 +277,8 @@ class GM:
 
         self.dE_Q_eq = dE_Q_eq
 
-        # compute the case with nonzero overpotential
-        if dE_eta != 0:
-            pass
-        else:
-            E_fermi = self.E - dE_Q_eq
-            E_DOS_redox = self.E - dE_Q_eq
+        E_fermi = self.E - dE_Q_eq
+        E_DOS_redox = self.E - dE_Q_eq - overpot
 
         if reverse:
             y_fermi = 1 - self.fermi_func(E_fermi, self.T)
@@ -261,141 +292,50 @@ class GM:
 
         return y_fermi, y_redox
 
-    '''def compute_k_HET(self, mode, V_std_pot_arr, dE_eta_arr, n_jobs=1):
+    def compute_k_HET(self, V_std_pot_arr, overpot_arr, reverse=False):
         """Compute integral k_HET using Geresher-Markus formalism
 
         Parameters:
         ----------
-        mode: string
-            Mode of computing that defines which parameters are fixed and which are varied
-
-            Possible values:
-                'fixed_overpot' - overpotential is fixed, Standard redox potential might be varied.
-                The process of electron transfer from electrode to redox particle is observed.
-
-                'fixed_overpot_reversed' - overpotential is fixed, Standard redox potential might be varied.
-                The process of electron transfer from redox particle to electrode is observed.
-
-                'fixed_std_pot' - standard redox potential is fixed, overpotential might be varied.
-                The process of electron transfer from electrode to redox particle is observed.
-
-                'fixed_std_pot_reversed' - standard redox potential is fixed, overpotential might be varied.
-                The process of electron transfer from redox particle to electrode is observed.
         V_std_pot_arr: float, np.ndarray
             A range of varying a standard potential
-        dE_eta_arr: float, np.ndarray
+        overpot_arr: float, np.ndarray
             A range of varying an overpotential
-        n_jobs: int, optional
-            Define the number of threads.
-            -1 means that all available cores will be used
+        reverse: bool, optional
+            if reverse is False the process of electron transfer from electrode to the oxidized state of the
+            redox particles is considered and vice versa
 
         Returns:
         -------
-        df: pd.DataFrame
-            Pandas DataFrame that contain columns:
-                E_std_pot - Standard Redox Potential
-
-                dE_eta - Overpotential
-
-                E_F_redox - Difference between Fermi energy of redox couple and electrode.
-                Fermi level of electrode is zero.
-                The sum of dE_Q_eq and dE_EDL_eq must be equal to E_F_redox
-
-                efermi - Fermi Energy
-
-                vacuul_lvl - Vacuum Level
-
-                dE_Q_eq - Displacement of Fermi energy due to quantum capacitance in
-                equilibrium case (overpotential = 0). Countered from Fermi level of
-                electrode
-
-                dE_EDL_eq - Difference between E_F_redox and Fermi level of electrode
-                plus dE_Q_eq in equilibrium case
-
-                sigma_eq - Charge density in equilibrium case.
-
-                dE_Q_overpot - ^^^ since overpotential is not equal to zero
-
-                dE_EDL_overpot - ^^^ since overpotential is not equal to zero
-
-                sigma_overpot - ^^^ since overpotential is not equal to zero
-
-                k_HET - constant of heterogeneous electron transfer
+        k_HET: np.ndarray
+            Calculated heterogeneous electron transfer rate constant according to Gerischer-Marcus model
         """
 
-        if n_jobs == -1:
-            n_jobs = int(os.environ["NUMBER_OF_PROCESSORS"])
+        if type(V_std_pot_arr) is np.ndarray:
+            if type(overpot_arr) is np.float64 or type(overpot_arr) is float:
 
-        df = pd.DataFrame()
+                k_HET = np.zeros_like(V_std_pot_arr)
 
-        if mode == 'fixed_overpot':
-            reverse = False
-            arrays_len = len(V_std_pot_arr)
-            thread_func = self.fixed_overpot_thread
-            df['V_std_pot'] = V_std_pot_arr
-            df['dE_eta'] = [dE_eta_arr] * len(V_std_pot_arr)
-        elif mode == 'fixed_std_pot':
-            reverse = False
-            arrays_len = len(dE_eta_arr)
-            thread_func = self.fixed_std_pot_thread
-            df['dE_eta'] = dE_eta_arr
-            df['V_std_pot'] = [V_std_pot_arr] * len(dE_eta_arr)
-        elif mode == 'fixed_overpot_reversed':
-            reverse = True
-            arrays_len = len(V_std_pot_arr)
-            thread_func = self.fixed_overpot_thread
-            df['V_std_pot'] = V_std_pot_arr
-            df['dE_eta'] = [dE_eta_arr] * len(V_std_pot_arr)
-        elif mode == 'fixed_std_pot_reversed':
-            reverse = True
-            arrays_len = len(dE_eta_arr)
-            thread_func = self.fixed_std_pot_thread
-            df['dE_eta'] = dE_eta_arr
-            df['V_std_pot'] = [V_std_pot_arr] * len(dE_eta_arr)
-        else:
-            raise ValueError('mode has unsupported value')
+                for i, V_std in enumerate(V_std_pot_arr):
+                    print(i)
+                    y_fermi, y_redox = self.compute_distributions(V_std, reverse=reverse, overpot=overpot_arr)
+                    integrand = self.DOS * y_fermi * y_redox
+                    k_HET[i] = integrate.simps(integrand, self.E)
 
-        # Init arrays with shared memory
-        E_F_redox = mp.Array('f', arrays_len)
-        dE_Q_eq = mp.Array('f', arrays_len)
-        dE_EDL_eq = mp.Array('f', arrays_len)
-        sigma_eq = mp.Array('f', arrays_len)
-        dE_Q_overpot = mp.Array('f', arrays_len)
-        dE_EDL_overpot = mp.Array('f', arrays_len)
-        sigma_overpot = mp.Array('f', arrays_len)
-        k_HET = mp.Array('f', arrays_len)
-        shared_arrays = [E_F_redox, dE_Q_eq, dE_EDL_eq, sigma_eq,
-                         dE_Q_overpot, dE_EDL_overpot, sigma_overpot, k_HET]
+                return k_HET
 
-        # Distribute tasks over n_jobs
-        start, end = self.split_array_into_nproc(arrays_len, n_jobs)
-        processes = []
-        for Id in range(n_jobs):
-            i_1 = start[Id]
-            i_2 = end[Id]
-            p = mp.Process(target=thread_func, args=(Id, i_1, i_2, V_std_pot_arr, dE_eta_arr,
-                                                     self.T, self.l, reverse, *shared_arrays))
-            processes.append(p)
+        elif type(overpot_arr) is np.ndarray:
+            if type(V_std_pot_arr) is np.float64 or type(V_std_pot_arr) is float:
 
-        # Start all threads and wait while they are finished
-        for proc in processes:
-            proc.start()
-        for proc in processes:
-            proc.join()
+                k_HET = np.zeros_like(overpot_arr)
 
-        df['E_F_redox'] = E_F_redox[:]
-        df['efermi'] = [self.efermi] * arrays_len
-        df['vacuul_lvl'] = [self.vacuum_lvl] * arrays_len
-        df['dE_Q_eq'] = dE_Q_eq[:]
-        df['dE_EDL_eq'] = dE_EDL_eq[:]
-        df['sigma_eq'] = sigma_eq[:]
-        df['dE_Q_overpot'] = dE_Q_overpot[:]
-        df['dE_EDL_overpot'] = dE_EDL_overpot[:]
-        df['sigma_overpot'] = sigma_overpot[:]
-        df['k_HET'] = k_HET[:]
+                for i, overpot in enumerate(overpot_arr):
+                    print(i)
+                    y_fermi, y_redox = self.compute_distributions(V_std_pot_arr, reverse=reverse, overpot=overpot)
+                    integrand = self.DOS * y_fermi * y_redox
+                    k_HET[i] = integrate.simps(integrand, self.E)
 
-        return df'''
-
+                return k_HET
 
 if __name__ == '__main__':
     def nearest_array_indices(array, value):
@@ -405,10 +345,16 @@ if __name__ == '__main__':
         return i - 1, i
     a = GM()
     a.set_params(10, 298, 0.9, 5.265949070860207e-14)
-    y_fermi, y_redox = a.compute_distributions(-1)
+    #x = np.arange(-2, 2, 0.2)
+    #k_HET = a.compute_k_HET(0.36, x, reverse=False)
+    #k_HET_reverse = a.compute_k_HET(0.36, x, reverse=True)
+    #plt.plot(x, k_HET)
+    #plt.plot(x, k_HET_reverse)
+    y_fermi, y_redox = a.compute_distributions(0.36, overpot=4)
+    print(a.sigma_eq)
     n_1, n_2 = nearest_array_indices(a.E, a.dE_Q_eq)
-    #print(n_1, n_2, a.dE_Q_eq)
-    #print(integrate.simps(a.DOS[:400], a.E[:400]))
+    print(n_1, n_2, a.dE_Q_eq)
+    print(integrate.simps(a.DOS[:400], a.E[:400]))
     plt.fill_between(a.E[:n_2], a.DOS[:n_2])
     plt.plot(a.E, a.DOS)
     plt.plot(a.E, y_redox * 10)
