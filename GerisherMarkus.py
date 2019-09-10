@@ -3,6 +3,7 @@ import scipy.integrate as integrate
 from scipy.optimize import minimize
 import os
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 class GM:
@@ -24,14 +25,19 @@ class GM:
         System vacuum level. If not specified values will be taken from saved data.
     """
     def __init__(self, DOS=None, E=None, efermi=None, vacuum_lvl=None):
+        # variables that might be defined through __init__ function
+        self.E = E
+        self.DOS = DOS
+        self.efermi = efermi
+        self.vacuum_lvl = vacuum_lvl
+
+        # variables that should be defined through set_params function
         self.C_EDL = None
         self.T = None
         self.l = None
         self.sheet_area = None
 
-        self.E = None
-        self.DOS = None
-
+        # variables that will be created during calculations
         self.sigma_eq = None
         self.dE_Q_eq = None
         self.y_fermi = None
@@ -316,8 +322,7 @@ class GM:
 
                 k_HET = np.zeros_like(V_std_pot_arr)
 
-                for i, V_std in enumerate(V_std_pot_arr):
-                    print(i)
+                for i, V_std in tqdm(enumerate(V_std_pot_arr), total=len(V_std_pot_arr)):
                     y_fermi, y_redox = self.compute_distributions(V_std, reverse=reverse, overpot=overpot_arr)
                     integrand = self.DOS * y_fermi * y_redox
                     k_HET[i] = integrate.simps(integrand, self.E)
@@ -329,8 +334,7 @@ class GM:
 
                 k_HET = np.zeros_like(overpot_arr)
 
-                for i, overpot in enumerate(overpot_arr):
-                    print(i)
+                for i, overpot in tqdm(enumerate(overpot_arr)):
                     y_fermi, y_redox = self.compute_distributions(V_std_pot_arr, reverse=reverse, overpot=overpot)
                     integrand = self.DOS * y_fermi * y_redox
                     k_HET[i] = integrate.simps(integrand, self.E)
