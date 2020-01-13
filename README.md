@@ -14,5 +14,5 @@ To date, the developed code allows to process the output DFT data from VASP and 
 
 # Acknowledgments
 
-1) The part of this project is supported by the by grant 18-03-00773A of Russian Foundation for Basic Research
+1) A part of this project is supported by the by grant 18-03-00773A of Russian Foundation for Basic Research
 2) We acknowledge QijingZheng (github.com/QijingZheng) for the VaspBandUnfolding project, which is very useful for processing WAVECAR
