@@ -4,7 +4,7 @@ The project aims to develop a code for processing DFT calculations to
  calculate the rate constant of the heterogeneous electron transfer from the 
  cathode surface to the redox particle in the electrolyte. The project is based 
  on the theories of Marcus, Landau-Zener, the concept of quantum capacity. 
- The part of the project uses Gerisher's approximations.
+ Part of the project uses Gerisher's approximations.
 
 To date, the developed code allows to process the output DFT data from VASP and calculate:
 1) 2D and 3D STM (scanning tunneling microscopy) images in various approximations of the acceptor orbital
