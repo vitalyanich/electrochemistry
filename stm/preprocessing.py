@@ -151,7 +151,6 @@ class Preprocessing():
         np.save(dir_to_save+'/WF_ijke', WF_ijke)
         print(dir_to_save+'/WF_ijke.npy Saved')
 
-
     def process_OUTCAR(self, outcar_path='OUTCAR', dir_to_save='Saved_data'):
         """
         process OUTCAR file obtained from VASP
