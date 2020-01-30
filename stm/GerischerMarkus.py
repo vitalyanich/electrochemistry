@@ -5,6 +5,7 @@ import numbers
 import typing
 from tqdm import tqdm
 from core.useful_funcs import nearest_array_indices, ClassMethods
+E_F_SHE_VAC = -4.5  # Fermi Energy of Standard Hydrogen Electrode with respect to vacuum
 
 
 class GM(ClassMethods):
@@ -244,7 +245,7 @@ class GM(ClassMethods):
         Parameters:
         ----------
         V_std: float
-            Standard potential of a redox couple (Volts)
+            Standard potential (vs SHE) of a redox couple (Volts)
         overpot: float, optional
             Overpotential (Volts). It shifts the electrode Fermi energy to -|e|*overpot
         reverse: bool, optional
@@ -294,7 +295,7 @@ class GM(ClassMethods):
             sigma_0 = self.__SIGMA_0
             sigma_Q_arr = self.sigma_Q_arr
 
-        E_F_redox = -4.5 - self.efermi - V_std + self.vacuum_lvl - overpot
+        E_F_redox = E_F_SHE_VAC - self.efermi - V_std + self.vacuum_lvl - overpot
 
         result = minimize(error_E_diff, np.array([sigma_0]), args=(E_F_redox, sigma_Q_arr))
         sigma = result.x[0]
@@ -317,7 +318,7 @@ class GM(ClassMethods):
         else:
             return y_fermi, y_redox, dE_Q, sigma, E_F_redox
 
-    def compute_k_HET(self, V_std_pot_arr, overpot_arr, reverse: bool = False, add_info: bool = False):
+    def compute_k_HET(self, V_std_pot_arr, overpot_arr, reverse=False, add_info=False):
         """Computes integral k_HET using Gerischer-Markus formalism with quantum capacitance
 
         Parameters:
@@ -456,7 +457,7 @@ class GM(ClassMethods):
                 k_HET = np.zeros_like(V_std_pot_arr)
 
                 for i, V_std in tqdm(enumerate(V_std_pot_arr), total=len(V_std_pot_arr)):
-                    E_F_redox = -4.5 - self.efermi - V_std + self.vacuum_lvl
+                    E_F_redox = E_F_SHE_VAC - self.efermi - V_std + self.vacuum_lvl
                     E_DOS_redox = self.E - E_F_redox
                     E_fermi = E_DOS_redox - overpot_arr
 
@@ -476,7 +477,7 @@ class GM(ClassMethods):
                 k_HET = np.zeros_like(overpot_arr)
 
                 for i, overpot in tqdm(enumerate(overpot_arr), total=len(overpot_arr)):
-                    E_F_redox = -4.5 - self.efermi - V_std_pot_arr + self.vacuum_lvl - overpot
+                    E_F_redox = E_F_SHE_VAC - self.efermi - V_std_pot_arr + self.vacuum_lvl - overpot
                     E_fermi = self.E - E_F_redox
                     E_DOS_redox = self.E - E_F_redox - overpot
 

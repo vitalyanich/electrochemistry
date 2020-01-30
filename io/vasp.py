@@ -14,8 +14,8 @@ class Poscar:
         self._sdynamics_data = sdynamics_data
 
     @staticmethod
-    def from_file(filename):
-        file = open(filename, 'r')
+    def from_file(filepath):
+        file = open(filepath, 'r')
         data = file.readlines()
         file.close()
 
@@ -68,8 +68,8 @@ class Poscar:
         else:
             return Poscar(struct, comment)
 
-    def to_file(self, filename):
-        file = open(filename, 'w')
+    def to_file(self, filepath):
+        file = open(filepath, 'w')
         file.write(f'{self.comment}\n')
         file.write('1\n')
         for vector in self._structure.lattice:

@@ -20,18 +20,18 @@ class STM:
     BOLTZMANN_CONSTANT = 8.617333262145e-5  # Boltzmann's constant in eV/K
     ELEM_CHARGE = 1.60217662e-19            # Elementary charge in Coulombs
     BOHR_RADIUS = 1.88973
-    ELEMENTS_NAMES = {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 10: 'Ne',\
-                        11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P ', 16: 'S ', 17: 'Cl', 18: 'Ar', 19: 'K ', 20: 'Ca',\
-                        21: 'Sc', 22: 'Ti', 23: 'V ', 24: 'Cr', 25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni', 29: 'Cu', 30: 'Zn',\
-                        31: 'Ga', 32: 'Ge', 33: 'As', 34: 'Se', 35: 'Br', 36: 'Kr', 37: 'Rb', 38: 'Sr', 39: 'Y ', 40: 'Zr',\
-                        41: 'Nb', 42: 'Mo', 43: 'Tc', 44: 'Ru', 45: 'Rh', 46: 'Pd', 47: 'Ag', 48: 'Cd', 49: 'In', 50: 'Sn',\
-                        51: 'Sb', 52: 'Te', 53: 'I ', 54: 'Xe', 55: 'Cs', 56: 'Ba', 57: 'La', 58: 'Ce', 59: 'Pr', 60: 'Nd',\
-                        61: 'Pm', 62: 'Sm', 63: 'Eu', 64: 'Gd', 65: 'Tb', 66: 'Dy', 67: 'Ho', 68: 'Er', 69: 'Tm', 70: 'Yb',\
-                        71: 'Lu', 72: 'Hf', 73: 'Ta', 74: 'W ', 75: 'Re', 76: 'Os', 77: 'Ir', 78: 'Pt', 79: 'Au', 80: 'Hg',\
-                        81: 'Tl', 82: 'Pb', 83: 'Bi', 84: 'Po', 85: 'At', 86: 'Rn', 87: 'Fr', 88: 'Ra', 89: 'Ac', 90: 'Th',\
-                        91: 'Pa', 92: 'U ', 93: 'Np', 94: 'Pu', 95: 'Am', 96: 'Cm', 97: 'Bk', 98: 'Cf', 99: 'Es', 100: 'Fm',\
-                        101: 'Md', 102: 'No', 103: 'Lr', 104: 'Rf', 105: 'Db', 106: 'Sg', 107: 'Bh', 108: 'Hs', 109: 'Mt', 110: 'Ds',\
-                        111: 'Rg', 112: 'Cn', 113: 'Nh', 114: 'Fl', 115: 'Mc', 116: 'Lv', 117: 'Ts', 118: 'Og'}
+    ELEMENTS_NAMES = {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O', 9: 'F', 10: 'Ne',
+                      11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P ', 16: 'S ', 17: 'Cl', 18: 'Ar', 19: 'K ', 20: 'Ca',
+                      21: 'Sc', 22: 'Ti', 23: 'V ', 24: 'Cr', 25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni', 29: 'Cu', 30: 'Zn',
+                      31: 'Ga', 32: 'Ge', 33: 'As', 34: 'Se', 35: 'Br', 36: 'Kr', 37: 'Rb', 38: 'Sr', 39: 'Y ', 40: 'Zr',
+                      41: 'Nb', 42: 'Mo', 43: 'Tc', 44: 'Ru', 45: 'Rh', 46: 'Pd', 47: 'Ag', 48: 'Cd', 49: 'In', 50: 'Sn',
+                      51: 'Sb', 52: 'Te', 53: 'I ', 54: 'Xe', 55: 'Cs', 56: 'Ba', 57: 'La', 58: 'Ce', 59: 'Pr', 60: 'Nd',
+                      61: 'Pm', 62: 'Sm', 63: 'Eu', 64: 'Gd', 65: 'Tb', 66: 'Dy', 67: 'Ho', 68: 'Er', 69: 'Tm', 70: 'Yb',
+                      71: 'Lu', 72: 'Hf', 73: 'Ta', 74: 'W ', 75: 'Re', 76: 'Os', 77: 'Ir', 78: 'Pt', 79: 'Au', 80: 'Hg',
+                      81: 'Tl', 82: 'Pb', 83: 'Bi', 84: 'Po', 85: 'At', 86: 'Rn', 87: 'Fr', 88: 'Ra', 89: 'Ac', 90: 'Th',
+                      91: 'Pa', 92: 'U ', 93: 'Np', 94: 'Pu', 95: 'Am', 96: 'Cm', 97: 'Bk', 98: 'Cf', 99: 'Es', 100: 'Fm',
+                      101: 'Md', 102: 'No', 103: 'Lr', 104: 'Rf', 105: 'Db', 106: 'Sg', 107: 'Bh', 108: 'Hs', 109: 'Mt',
+                      110: 'Ds', 111: 'Rg', 112: 'Cn', 113: 'Nh', 114: 'Fl', 115: 'Mc', 116: 'Lv', 117: 'Ts', 118: 'Og'}
 
     def __init__(self, path_to_data, poscar_path):
         self.WF_ijke = None
@@ -186,15 +186,15 @@ class STM:
 
     def _calculate_distributions(self):
         """
-        This function calls GerisherMarcus module with GM class to calculate distribution of redox species
-        and Fermi-Dirac distribution according to Gerisher-Marcformalismizm
+        This function calls Gerischer-Marcus module with GM class to calculate distribution of redox species
+        and Fermi-Dirac distribution according to Gerischer-Marcus formalism
         :return:
         """
-        from stm import GerischerMarkus as gm
-        gerisher_marcus_obj = gm.GM()
-        gerisher_marcus_obj.set_params(self.C_EDL, self.T, self.lambda_, self.sheet_area)
-        self.y_fermi, self.y_redox = gerisher_marcus_obj.compute_distributions(self.V_std, overpot=self.overpot)
-        return gerisher_marcus_obj
+        from stm.GerischerMarkus import GM
+        gerischer_marcus_obj = GM()
+        gerischer_marcus_obj.set_params(self.C_EDL, self.T, self.lambda_, self.sheet_area)
+        self.y_fermi, self.y_redox = gerischer_marcus_obj.compute_distributions(self.V_std, overpot=self.overpot)
+        return gerischer_marcus_obj
 
     @staticmethod
     def _nearest_array_indices(array, value):
@@ -204,9 +204,10 @@ class STM:
         return i - 1, i
 
     def plot_distributions(self, E_range=[-7, 4], dE=None, sigma=2, fill_area_lower_Fermi_lvl=True,
-                 plot_Fermi_Dirac_distib=True, plot_redox_distrib=True):
+                           plot_Fermi_Dirac_distib=True, plot_redox_distrib=True):
+        # TODO GM object hasn't property dE_Q_eq
         a = self._calculate_distributions()
-        if dE == None:
+        if dE is None:
             dE = self.dE
         if dE != self.dE or E_range[0] < self.energy_range[0] or E_range[1] > self.energy_range[1]:
             p = prep.Preprocessing()
@@ -214,14 +215,14 @@ class STM:
         else:
             E, DOS = a.E, a.DOS
         n_1, n_2 = self._nearest_array_indices(E, a.dE_Q_eq)
-        if sigma > 0 and sigma != None:
+        if sigma > 0 and sigma is not None:
             DOS = gaussian_filter1d(DOS, sigma)
         plt.plot(E, DOS)
-        if fill_area_lower_Fermi_lvl == True:
+        if fill_area_lower_Fermi_lvl:
             plt.fill_between(E[:n_2], DOS[:n_2])
-        if plot_Fermi_Dirac_distib == True:
+        if plot_Fermi_Dirac_distib:
             plt.plot(a.E, self.y_fermi * 30)
-        if plot_redox_distrib == True:
+        if plot_redox_distrib:
             plt.plot(a.E, self.y_redox * 10)
         plt.xlabel('E, eV')
         plt.ylabel('DOS, states/eV/cell')
@@ -241,8 +242,6 @@ class STM:
     def _get_basis_vectors(self):
         """
         This function processes POSCAR file to extract vectors of the simulation box
-        :param poscar_path:
-        :return:
         """
         with open(self.poscar_path) as inf:
             lines = inf.readlines()
@@ -344,8 +343,8 @@ class STM:
 
                 integral = []
                 for orbital in orb_rolled:
-                    integral.append(np.linalg.norm(WF_ijk_rolled[xmin:xmax, ymin:ymax, zmin:zmax]*\
-                                   orbital[xmin:xmax, ymin:ymax, zmin:zmax]))
+                    integral.append(np.linalg.norm(WF_ijk_rolled[xmin:xmax, ymin:ymax, zmin:zmax] *
+                                                   orbital[xmin:xmax, ymin:ymax, zmin:zmax]))
                 overlap_integrals_squared[i][j] = max(integral) ** 2
 
         return overlap_integrals_squared
@@ -365,7 +364,7 @@ class STM:
         numer_of_orbitals = len(tip_types.orbitals(orb_type))
         acc_orbitals = []
         for i in range(numer_of_orbitals):
-             acc_orbitals.append(np.zeros(shape))
+            acc_orbitals.append(np.zeros(shape))
         for i in range(shape[0]):
             for j in range(shape[1]):
                 for k in range(shape[2]):
@@ -435,7 +434,7 @@ class STM:
                       "if you don't care about efficiency")
                 zmin = 0
                 zmax = zlen
-            # TODO Unresolved reference stm. in the net line
+            # TODO Unresolved reference stm. in the next line
             stm._calculate_distributions()
             for e in range(elen):
                 if self.y_redox[e] < self.threshold_value or self.y_fermi[e] < self.threshold_value:

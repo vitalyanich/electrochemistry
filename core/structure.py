@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Union, List, Iterable
+from typing import Union, List, Sequence, Iterable
 
 
 class Structure:
@@ -9,13 +9,13 @@ class Structure:
         lattice: 2D array that contains lattice vectors. Each row should corresponds to a lattice vector.
             E.g., [[5, 5, 0], [7, 4, 0], [0, 0, 25]].
         species: List of species on each site. Usually list of elements, e.g., ['Al', 'Al', 'O', 'H'].
-        coords: List or np.ndarray (Nx3 dimension) that contains coords of each species.
+        coords: List of lists or np.ndarray (Nx3 dimension) that contains coords of each species.
         coords_are_cartesian: True if coords is cartesian, False if coords is fractional
     """
     def __init__(self,
                  lattice: Union[List, np.ndarray],
                  species: List[str],
-                 coords: Iterable[Iterable[float]],
+                 coords: Sequence[Sequence[float]],
                  coords_are_cartesian: bool = True):
 
         if len(species) != len(coords):

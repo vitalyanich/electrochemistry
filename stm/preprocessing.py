@@ -3,12 +3,13 @@ import itertools
 import numpy as np
 from pymatgen.io.vasp.outputs import Locpot
 from vaspwfc import vaspwfc
-import os, sys, time
+import os
+import sys
+import time
 import multiprocessing as mp
-import matplotlib.pyplot as plt
 
 
-class Preprocessing():
+class Preprocessing:
     """
     This class is for basic preprocessing VASP output files (WAVECAR, OUTCAR, LOCPOT)
     Main goal for this class is to extract necessary date from VASP files and save data to .npy files:
@@ -64,7 +65,7 @@ class Preprocessing():
                 wf = wavecar.wfc_r(ikpt=kpoint, iband=band, ngrid=wavecar._ngrid * 1.5)
                 phi_real = np.real(wf)
                 phi_imag = np.imag(wf)
-                print ("Wavefunction done from process:", e, "; kpoint = ", kpoint, "; band = ", band)
+                print("Wavefunction done from process:", e, "; kpoint = ", kpoint, "; band = ", band)
                 sys.stdout.flush()
                 WF_for_current_Energy_real += phi_real * weights[kpoint - 1]
                 WF_for_current_Energy_imag += phi_imag * weights[kpoint - 1]
@@ -73,7 +74,7 @@ class Preprocessing():
             for ii in range(n):
                 arr_real[ii + start] = float(WF_for_current_Energy_1D_real[ii])
                 arr_imag[ii + start] = float(WF_for_current_Energy_1D_imag[ii])
-            print ("Energy ", e, " finished, it takes: ", time.time()-t, " sec")
+            print("Energy ", e, " finished, it takes: ", time.time()-t, " sec")
             sys.stdout.flush()
             done_number.value += 1
             print(done_number.value, " energies are done")
@@ -121,7 +122,8 @@ class Preprocessing():
                 energies = np.arange(i * Energies_per_CPU, energies_number)
             else:
                 energies = np.arange(i * Energies_per_CPU, (i + 1) * Energies_per_CPU)
-            p = mp.Process(target=self.get_wavefunction, args=(mesh_shape, energies, kb_array, self.weights, arr_real, arr_imag, done_number, wavecar_path))
+            p = mp.Process(target=self.get_wavefunction, args=(mesh_shape, energies, kb_array, self.weights, arr_real,
+                                                               arr_imag, done_number, wavecar_path))
             processes.append(p)
         print(numCPU, " CPU Available")
         for step in range(len(processes) // numCPU + 1):
@@ -248,7 +250,7 @@ class Preprocessing():
         else:
             if getattr(self, variable) is None:
                 try:
-                    print('Try load variable ',variable, ' from dir ', dir)
+                    print('Try load variable ', variable, ' from dir ', dir)
                     self.load(variable, dir)
                 except:
                     if variable == 'vacuum_lvl':
@@ -274,9 +276,9 @@ class Preprocessing():
             except:
                 print("Loading failed. Start processing OUTCAR")
                 self.process_OUTCAR(outcar_path)
-            return self.eigenvalues[:,band]
+            return self.eigenvalues[:, band]
         else:
-            return self.eigenvalues[:,band]
+            return self.eigenvalues[:, band]
 
     def get_band_occ(self, band, outcar_path='OUTCAR'):
         """
@@ -316,7 +318,7 @@ class Preprocessing():
                 energy = self.eigenvalues[k][b]
                 if energy > Erange[0] and energy < Erange[1]:
                     e = int((energy - Erange[0]) / dE)
-                    DOS_arr[e]+=self.weights[k]/dE
+                    DOS_arr[e] += self.weights[k]/dE
         return E_arr, DOS_arr
 
 
@@ -368,12 +370,3 @@ class Espresso:
     def get_band_occ(self, band):
         if type(band) is int:
             return [occ for occ in self.occupations[:, band]]
-
-if __name__=='__main__':
-    outcar_path = 'OUTCAR'
-    wavecar_path = 'WAVECAR'
-    p = Preprocessing()
-    p.process_OUTCAR('OUTCAR_2', 'Saved_data_2')
-    E_arr, DOS_arr = p.get_DOS((-10.0, 5.0), 0.1)
-    plt.plot(E_arr, DOS_arr)
-    plt.show()
