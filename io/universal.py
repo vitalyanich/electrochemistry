@@ -50,11 +50,13 @@ class Cube:
             self.structure = Structure(atom_numbers, charges, coords)
 
             self.data = np.zeros((self.cell.NX, self.cell.NY, self.cell.NZ))
-            for i, line in enumerate(file):
+            i = 0
+            for line in file:
                 for value in line.split():
                     self.data[int(i / (self.cell.NY * self.cell.NZ)),
                               int((i / self.cell.NZ) % self.cell.NY),
                               int(i % self.cell.NZ)] = float(value)
+                    i += 1
 
     def get_average_along_axis(self, axis):
         """
