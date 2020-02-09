@@ -130,6 +130,5 @@ class Poscar:
             else:
                 self._sdynamics_data[ids] = new_sdynamics_data
 
-
     def convert(self, frmt):
         pass

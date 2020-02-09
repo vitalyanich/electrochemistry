@@ -1,5 +1,6 @@
 import numpy as np
 import collections
+from core.structure import Structure
 
 
 class Cube:
@@ -9,6 +10,7 @@ class Cube:
         self.cell = None
         self.structure = None
         self.data = None
+        self.comment = None
 
     def __repr__(self):
         data = {'filepath': self.filepath, 'natoms': self.natoms, 'cell': self.cell, 'structure': self.structure}
@@ -17,24 +19,32 @@ class Cube:
     def from_file(self, filepath):
         self.filepath = filepath
         with open(self.filepath, 'rt') as file:
-            next(file)
-            next(file)
+            comment_1 = file.readline()
+            comment_2 = file.readline()
+            self.comment = comment_1 + comment_2
 
             line = file.readline().split()
             self.natoms = int(line[0])
-            origin = np.array([line[1], line[2], line[3]])
+            origin = np.array([float(line[1]), float(line[2]), float(line[3])])
             line = file.readline().split()
             NX = int(line[0])
-            xaxis = np.array([line[1], line[2], line[3]])
+            xaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
             line = file.readline().split()
             NY = int(line[0])
-            yaxis = np.array([line[1], line[2], line[3]])
+            yaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
             line = file.readline().split()
             NZ = int(line[0])
-            zaxis = np.array([line[1], line[2], line[3]])
+            zaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
 
-            Cell = collections.namedtuple('Cell', 'origin, NX, NY, NZ, xaxis, yaxis, zaxis')
-            self.cell = Cell(origin, NX, NY, NZ, xaxis, yaxis, zaxis)
+            if NX > 0 and NY > 0 and NZ > 0:
+                units = 'Bohr'
+            elif NX < 0 and NY < 0 and NZ < 0:
+                units = 'Angstrom'
+            else:
+                raise ValueError('The sign of the number of all voxels should be > 0 or < 0')
+
+            Cell = collections.namedtuple('Cell', 'origin, NX, NY, NZ, xaxis, yaxis, zaxis, units')
+            self.cell = Cell(origin, NX, NY, NZ, xaxis, yaxis, zaxis, units)
 
             atom_numbers = np.zeros((self.natoms, ), dtype=int)
             charges = np.zeros((self.natoms, ))
@@ -96,3 +106,7 @@ class Cube:
             return np.max(avr)
         else:
             return scale * np.max(avr)
+
+    def get_structure(self):
+
+        struct = Structure(lattice, species, coords, coords_are_cartesian)
