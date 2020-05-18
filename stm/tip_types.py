@@ -1,6 +1,7 @@
 import numpy as np
 import math
 
+
 def read_orbital_data(filename):
     data=[]
     with open(filename) as inp:
@@ -27,6 +28,7 @@ def read_orbital_data(filename):
             except:
                 pass
     return data
+
 
 def get_mol_orbital(data, centers):
     def inner_func(r):
@@ -60,6 +62,7 @@ def get_mol_orbital(data, centers):
                 print('Error! This type is not described! type = ', type)
         return result
     return inner_func
+
 
 def orbitals(tip_type):
 

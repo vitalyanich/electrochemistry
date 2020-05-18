@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Union, List, Iterable
-from core.structure import Structure
+from electrochemistry.core.structure import Structure
 
 
 class Poscar:
@@ -38,16 +38,16 @@ class Poscar:
 
         sdynamics_is_used = False
         start_atoms = 8
-        if data[7] in 'sS':
+        if data[7][0] in 'sS':
             sdynamics_is_used = True
             start_atoms = 9
 
         coords_are_cartesian = False
         if sdynamics_is_used:
-            if data[8] in 'cCkK':
+            if data[8][0] in 'cCkK':
                 coords_are_cartesian = True
         else:
-            if data[7] in 'cCkK':
+            if data[7][0] in 'cCkK':
                 coords_are_cartesian = True
 
         coords = []
@@ -123,12 +123,27 @@ class Poscar:
         self._structure.change_atoms(ids, new_coords, new_species)
         if new_sdynamics_data is not None:
             if self._sdynamics_data is None:
-                self._sdynamics_data = [['T', 'T', 'T'] for i in range(self._structure.natoms)]
+                self._sdynamics_data = [['T', 'T', 'T'] for _ in range(self._structure.natoms)]
             if isinstance(ids, Iterable):
                 for i, new_sdata in zip(ids, new_sdynamics_data):
                     self._sdynamics_data[i] = new_sdata
             else:
                 self._sdynamics_data[ids] = new_sdynamics_data
+
+    def coords_to_cartesian(self):
+        if self._structure.coords_are_cartesian is True:
+            return 'Coords are already cartesian'
+        else:
+            self._structure._coords = np.matmul(self._structure.coords, self._structure.lattice)
+            self._structure.coords_are_cartesian = True
+
+    def coords_to_direct(self):
+        if self._structure.coords_are_cartesian is False:
+            return 'Coords are alresdy direct'
+        else:
+            transform = np.linalg.inv(self._structure.lattice)
+            self._structure._coords = np.matmul(self._structure.coords, transform)
+            self._structure.coords_are_cartesian = False
 
     def convert(self, frmt):
         pass

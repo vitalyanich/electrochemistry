@@ -4,7 +4,7 @@ from scipy.optimize import minimize
 import numbers
 import typing
 from tqdm import tqdm
-from core.useful_funcs import nearest_array_indices, ClassMethods
+from electrochemistry.core.useful_funcs import nearest_array_indices, ClassMethods
 E_F_SHE_VAC = -4.5  # Fermi Energy of Standard Hydrogen Electrode with respect to vacuum
 
 

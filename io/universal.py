@@ -1,6 +1,5 @@
 import numpy as np
 import collections
-from core.structure import Structure
 
 
 class Cube:
@@ -108,5 +107,4 @@ class Cube:
             return scale * np.max(avr)
 
     def get_structure(self):
-
-        struct = Structure(lattice, species, coords, coords_are_cartesian)
+        pass

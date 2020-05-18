@@ -1,7 +1,8 @@
 from scipy.interpolate import griddata
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.ndimage.filters import gaussian_filter1d
-from stm import tip_types, preprocessing, preprocessing as prep
+from . import tip_types
+from . import preprocessing as prep
 import numpy as np
 import os
 import math
@@ -190,7 +191,7 @@ class STM:
         and Fermi-Dirac distribution according to Gerischer-Marcus formalism
         :return:
         """
-        from stm.GerischerMarkus import GM
+        from stm import GM
         gerischer_marcus_obj = GM()
         gerischer_marcus_obj.set_params(self.C_EDL, self.T, self.lambda_, self.sheet_area)
         self.y_fermi, self.y_redox = gerischer_marcus_obj.compute_distributions(self.V_std, overpot=self.overpot)
