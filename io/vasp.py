@@ -13,6 +13,9 @@ class Poscar:
         self.comment = comment
         self._sdynamics_data = sdynamics_data
 
+    def __repr__(self):
+        return f'{self.comment}\n' + repr(self._structure)
+
     @staticmethod
     def from_file(filepath):
         file = open(filepath, 'r')

@@ -35,6 +35,41 @@ class Structure:
 
         self.coords_are_cartesian = coords_are_cartesian
 
+    def __repr__(self):
+        lines = ['\nLattice:']
+
+        width = len(str(int(np.max(self._lattice)))) + 6
+        for axis in self._lattice:
+            lines.append('  '.join([f'{axis_coord:{width}.5f}' for axis_coord in axis]))
+
+        width = len(str(int(np.max(self._coords)))) + 6
+
+        lines.append('\nSpecies:')
+
+        unique, counts = np.unique(self._species, return_counts=True)
+
+        if len(self._species) < 10:
+            lines.append(' '.join([s for s in self._species]))
+            for u, c in zip(unique, counts):
+                lines.append(f'{u}: {c}')
+            lines.append('\nCoords:')
+            for coord in self._coords:
+                lines.append('  '.join([f'{c:{width}.5f}' for c in coord]))
+        else:
+            part_1 = ' '.join([s for s in self._species[:5]])
+            part_2 = ' '.join([s for s in self._species[-5:]])
+            lines.append(part_1 + ' ... ' + part_2)
+            for u, c in zip(unique, counts):
+                lines.append(f'{u}: {c}')
+            lines.append('\nCoords:')
+            for coord in self._coords[:5]:
+                lines.append('  '.join([f'{c:{width}.5f}' for c in coord]))
+            lines.append('...')
+            for coord in self._coords[-5:]:
+                lines.append('  '.join([f'{c:{width}.5f}' for c in coord]))
+
+        return '\n'.join(lines)
+
     @property
     def lattice(self):
         return self._lattice
@@ -67,6 +102,16 @@ class Structure:
             self._species += species
 
     def change_atoms(self, ids, coords, species):
+        """
+        Change selected atom by id .
+        Args:
+            ids: List or int. first id is zero.
+            coords: None os np.array with new coords, e.g. np.array([1, 2, 4.6])
+            species: None of str or List[str]. New types of changed atoms
+
+        Returns:
+
+        """
         if coords is not None:
             self._coords[ids] = coords
         if species is not None:
@@ -75,6 +120,27 @@ class Structure:
                     self._species[i] = sp
             else:
                 self._species[ids] = species
+
+    def coords_to_cartesian(self):
+        if self.coords_are_cartesian is True:
+            return 'Coords are already cartesian'
+        else:
+            self._coords = np.matmul(self.coords, self.lattice)
+            self.coords_are_cartesian = True
+
+    def coords_to_direct(self):
+        if self.coords_are_cartesian is False:
+            return 'Coords are alresdy direct'
+        else:
+            transform = np.linalg.inv(self.lattice)
+            self._coords = np.matmul(self.coords, transform)
+            self.coords_are_cartesian = False
+
+    def get_vector(self, ids):
+        pass
+
+    def rotate(self, vector, angle):
+        pass
 
 
 class StructureError(Exception):
