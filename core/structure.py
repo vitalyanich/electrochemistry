@@ -136,8 +136,9 @@ class Structure:
             self._coords = np.matmul(self.coords, transform)
             self.coords_are_cartesian = False
 
-    def get_vector(self, ids):
-        pass
+    def get_vector(self, id_1, id_2):
+        vector = self._coords[id_1] - self._coords[id_2]
+        return vector / np.linalg.norm(vector)
 
     def rotate(self, vector, angle):
         pass
