@@ -1,39 +1,42 @@
 import numpy as np
-import collections
+from electrochemistry.core.constants import ElemNum2Name, Bohr2Angstom
+from electrochemistry.core.structure import Structure
 
 
 class Cube:
-    def __init__(self):
-        self.filepath = None
-        self.natoms = None
-        self.cell = None
-        self.structure = None
-        self.data = None
-        self.comment = None
+    def __init__(self, structure, comment, Ns_arr, charges, data):
+        self.structure = structure
+        self.comment = comment
+        self.Ns = Ns_arr
+        self.charges = charges
+        self.volumetric_data = data
 
     def __repr__(self):
-        data = {'filepath': self.filepath, 'natoms': self.natoms, 'cell': self.cell, 'structure': self.structure}
-        return data.__repr__()
+        return f'{self.comment}\n' + f'NX: {self.Ns[0]}\nNY: {self.Ns[1]}\nNZ: {self.Ns[2]}' + repr(self.structure)
 
-    def from_file(self, filepath):
-        self.filepath = filepath
-        with open(self.filepath, 'rt') as file:
+    @staticmethod
+    def from_file(filepath):
+        with open(filepath, 'rt') as file:
             comment_1 = file.readline()
             comment_2 = file.readline()
-            self.comment = comment_1 + comment_2
+            comment = comment_1 + comment_2
 
             line = file.readline().split()
-            self.natoms = int(line[0])
+            natoms = int(line[0])
+
             origin = np.array([float(line[1]), float(line[2]), float(line[3])])
+            if not all(i == 0 for i in origin):
+                raise ValueError('Cube file with not zero origin can\'t be processed')
             line = file.readline().split()
             NX = int(line[0])
-            xaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
+            xaxis = NX * np.array([float(line[1]), float(line[2]), float(line[3])])
             line = file.readline().split()
             NY = int(line[0])
-            yaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
+            yaxis = NY * np.array([float(line[1]), float(line[2]), float(line[3])])
             line = file.readline().split()
             NZ = int(line[0])
-            zaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
+            zaxis = NZ * np.array([float(line[1]), float(line[2]), float(line[3])])
+            lattice = np.array([xaxis, yaxis, zaxis])
 
             if NX > 0 and NY > 0 and NZ > 0:
                 units = 'Bohr'
@@ -42,30 +45,43 @@ class Cube:
             else:
                 raise ValueError('The sign of the number of all voxels should be > 0 or < 0')
 
-            Cell = collections.namedtuple('Cell', 'origin, NX, NY, NZ, xaxis, yaxis, zaxis, units')
-            self.cell = Cell(origin, NX, NY, NZ, xaxis, yaxis, zaxis, units)
+            species = np.zeros(natoms, dtype='<U1')
+            charges = np.zeros(natoms)
+            coords = np.zeros((natoms, 3))
 
-            atom_numbers = np.zeros((self.natoms, ), dtype=int)
-            charges = np.zeros((self.natoms, ))
-            coords = np.zeros((self.natoms, 3))
-
-            for atom in range(self.natoms):
+            for atom in range(natoms):
                 line = file.readline().split()
-                atom_numbers[atom] = line[0]
-                charges[atom] = line[1]
+                species[atom] = ElemNum2Name[int(line[0])]
+                charges[atom] = float(line[1])
                 coords[atom, :] = line[2:]
 
-            Structure = collections.namedtuple('Structure', 'atom_number charge coords')
-            self.structure = Structure(atom_numbers, charges, coords)
+            if units == 'Bohr':
+                lattice = Bohr2Angstom * lattice
+                coords = Bohr2Angstom * coords
 
-            self.data = np.zeros((self.cell.NX, self.cell.NY, self.cell.NZ))
+            structure = Structure(lattice, species, coords, coords_are_cartesian=True)
+
+            data = np.zeros((NX, NY, NZ))
+            indexes = np.arange(0, NX * NY * NZ)
+            indexes_1 = indexes // (NY * NZ)
+            indexes_2 = (indexes // NZ) % NY
+            indexes_3 = indexes % NZ
+
             i = 0
             for line in file:
                 for value in line.split():
-                    self.data[int(i / (self.cell.NY * self.cell.NZ)),
-                              int((i / self.cell.NZ) % self.cell.NY),
-                              int(i % self.cell.NZ)] = float(value)
+                    data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
                     i += 1
+
+            #data = np.loadtxt(file).reshape((NX, NY, NZ))
+
+            #i = 0
+            #for line in file:
+            #    for value in line.split():
+            #        data[int(i / (NY * NZ)), int((i / NZ) % NY), int(i % NZ)] = float(value)
+            #        i += 1
+
+            return Cube(structure, comment, np.array([NX, NY, NZ]), charges, data)
 
     def get_average_along_axis(self, axis):
         """
@@ -80,15 +96,15 @@ class Cube:
             np.array of average value along selected axis
         """
         if axis == 2:
-            return np.mean(self.data, (0, 1))
+            return np.mean(self.volumetric_data, (0, 1))
         elif axis == 1:
-            return np.mean(self.data, (0, 2))
+            return np.mean(self.volumetric_data, (0, 2))
         elif axis == 0:
-            return np.mean(self.data, (1, 2))
+            return np.mean(self.volumetric_data, (1, 2))
         else:
             raise ValueError('axis can be only 0, 1 or 2')
 
-    def get_vacuum_lvl(self, axis: int, scale=None):
+    def get_average_along_axis_max(self, axis: int, scale=None):
         """Calculate the vacuum level (the maximum planar average value along selected axis)
 
         Args:
@@ -105,6 +121,3 @@ class Cube:
             return np.max(avr)
         else:
             return scale * np.max(avr)
-
-    def get_structure(self):
-        pass

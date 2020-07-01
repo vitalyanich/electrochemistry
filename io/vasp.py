@@ -7,11 +7,19 @@ from electrochemistry.core.structure import Structure
 
 
 class Poscar:
-    # TODO Description
+    """Class that reads VASP POSCAR files"""
     def __init__(self,
                  structure,
                  comment: str = None,
                  sdynamics_data=None):
+        """
+        Create an Poscar instance
+        Args:
+            structure (Structure class): a base class that contains lattice, coords and species information
+            comment (str): a VASP comment
+            sdynamics_data (list, 2D np.array): data about selective dynamics for each atom. [['T', 'T', 'F'],
+            ['F', 'F', 'F'],...]
+        """
         self._structure = structure
         self.comment = comment
         self._sdynamics_data = sdynamics_data
@@ -21,6 +29,14 @@ class Poscar:
 
     @staticmethod
     def from_file(filepath):
+        """
+        Static method to read a POSCAR file
+        Args:
+            filepath: path to the POSCAR file
+
+        Returns:
+            Poscar class object
+        """
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
@@ -114,7 +130,7 @@ class Poscar:
         file.close()
 
     def add_atoms(self, coords, species, sdynamics_data=None):
-        self._structure.add_atoms(coords, species)
+        self._structure.mod_add_atoms(coords, species)
         if sdynamics_data is not None:
             if any(isinstance(el, list) for el in sdynamics_data):
                 for sd_atom in sdynamics_data:
@@ -126,7 +142,7 @@ class Poscar:
                      new_coords: Union[Iterable[float], Iterable[Iterable[float]]] = None,
                      new_species: Union[str, List[str]] = None,
                      new_sdynamics_data: Union[Iterable[str], Iterable[Iterable[str]]] = None):
-        self._structure.change_atoms(ids, new_coords, new_species)
+        self._structure.mod_change_atoms(ids, new_coords, new_species)
         if new_sdynamics_data is not None:
             if self._sdynamics_data is None:
                 self._sdynamics_data = [['T', 'T', 'T'] for _ in range(self._structure.natoms)]
@@ -156,7 +172,7 @@ class Poscar:
 
 
 class Outcar:
-    # TODO Description
+    """Class that reads VASP OUTCAR files"""
     def __init__(self, nkpts, nbands, weights, nisteps, efermi, eigenvalues, occupations,
                  efermi_hist=None, eigenvalues_hist=None, occupations_hist=None, energy_hist=None):
         self.nkpts = nkpts

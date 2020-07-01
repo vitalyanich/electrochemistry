@@ -10,11 +10,11 @@ class Structure:
             E.g., [[5, 5, 0], [7, 4, 0], [0, 0, 25]].
         species: List of species on each site. Usually list of elements, e.g., ['Al', 'Al', 'O', 'H'].
         coords: List of lists or np.ndarray (Nx3 dimension) that contains coords of each species.
-        coords_are_cartesian: True if coords is cartesian, False if coords is fractional
+        coords_are_cartesian: True if coords are cartesian, False if coords are fractional
     """
     def __init__(self,
                  lattice: Union[List, np.ndarray],
-                 species: List[str],
+                 species: Union[List[str], np.ndarray],
                  coords: Sequence[Sequence[float]],
                  coords_are_cartesian: bool = True):
 
@@ -71,22 +71,22 @@ class Structure:
         return '\n'.join(lines)
 
     @property
-    def lattice(self):
+    def lattice(self) -> np.ndarray:
         return self._lattice
 
     @property
-    def coords(self):
+    def coords(self) -> np.ndarray:
         return self._coords
 
     @property
-    def species(self):
+    def species(self) -> List[str]:
         return self._species
 
     @property
-    def natoms(self):
+    def natoms(self) -> int:
         return len(self._species)
 
-    def add_atoms(self, coords, species) -> None:
+    def mod_add_atoms(self, coords, species) -> None:
         """
         Add atoms in the Structure
         Args:
@@ -101,7 +101,7 @@ class Structure:
         else:
             self._species += species
 
-    def change_atoms(self, ids, coords, species):
+    def mod_change_atoms(self, ids, coords, species) -> None:
         """
         Change selected atom by id .
         Args:
@@ -121,27 +121,110 @@ class Structure:
             else:
                 self._species[ids] = species
 
-    def coords_to_cartesian(self):
+    def mod_coords_to_cartesian(self):
         if self.coords_are_cartesian is True:
             return 'Coords are already cartesian'
         else:
             self._coords = np.matmul(self.coords, self.lattice)
             self.coords_are_cartesian = True
 
-    def coords_to_direct(self):
+    def mod_coords_to_direct(self):
         if self.coords_are_cartesian is False:
-            return 'Coords are alresdy direct'
+            return 'Coords are already direct'
         else:
             transform = np.linalg.inv(self.lattice)
             self._coords = np.matmul(self.coords, transform)
             self.coords_are_cartesian = False
 
-    def get_vector(self, id_1, id_2):
+    def get_vector(self, id_1, id_2) -> np.ndarray:
         vector = self._coords[id_1] - self._coords[id_2]
         return vector / np.linalg.norm(vector)
 
-    def rotate(self, vector, angle):
-        pass
+    def get_distance_matrix(self) -> np.ndarray:
+        """
+        Returns distance matrix R, where R[i,j] is the vector from atom i to atom j.
+        Now works only for parallelepiped cells.
+
+        Returns:
+            distance matrix containing vectors
+        """
+        if self.coords_are_cartesian is False:
+            assert StructureError('Now only cartesian coords are supported')
+        r1 = np.broadcast_to(self.coords.reshape((self.natoms, 1, 3)), (self.natoms, self.natoms, 3))
+        r2 = np.broadcast_to(self.coords.reshape((1, self.natoms, 3)), (self.natoms, self.natoms, 3))
+        R = r2 - r1
+        L = np.broadcast_to(np.linalg.norm(self._lattice, axis=1).reshape((1, 1, 3)), (self.natoms, self.natoms, 3))
+        R = (R + L / 2) % L - L / 2.
+        assert np.all(R >= -L / 2.) and np.all(R <= L / 2.)
+        return R
+
+    def get_distance_matrix_scalar(self) -> np.ndarray:
+        """
+        Returns distance matrix R, where R[i, j] is the Euclidean norm of a vector from atom i to atom j.
+        Now works only for parallelepiped cells.
+
+        Returns:
+            distance matrix containing scalars
+        """
+        R = self.get_distance_matrix()
+        return np.sqrt(np.sum(R * R, axis=2))
+
+    def get_filtered_ids(self, **kwargs):
+        """
+        Returns np.ndarray that contains atom ids according to filter rules
+        Args:
+            species (str): Define which atom type will be selected. E.g. 'C H N' means select all C, H, and N atoms.
+            '!C' means select all atoms except C.
+        Returns:
+            np.ndarray contains ids of atoms according to selecting rules
+        """
+        filter_mask = np.array([True for _ in range(self.natoms)], dtype=np.bool_)
+
+        if 'species' in kwargs:
+            species = kwargs['species'].split()
+            species_select = []
+            species_not_select = []
+            for specie in species:
+                if '!' in specie:
+                    species_not_select.append(specie.replace('!', ''))
+                else:
+                    species_select.append(specie)
+            if len(species_select):
+                fm_local = np.array([False for _ in range(self.natoms)], dtype=np.bool_)
+                for specie in species_select:
+                    fm_local += np.array([True if atom_name == specie else False for atom_name in self._species])
+                filter_mask *= fm_local
+            if len(species_not_select):
+                fm_local = np.array([True for _ in range(self.natoms)], dtype=np.bool_)
+                for specie in species_not_select:
+                    fm_local *= np.array([False if atom_name == specie else True for atom_name in self._species])
+                filter_mask *= fm_local
+
+        if 'x' in kwargs:
+            left, right = kwargs['x']
+            fm_local = np.array([False for _ in range(self.natoms)], dtype=np.bool_)
+            for i, atom_coord in enumerate(self._coords):
+                if left < atom_coord[0] < right:
+                    fm_local[i] = True
+            filter_mask *= fm_local
+
+        if 'y' in kwargs:
+            left, right = kwargs['y']
+            fm_local = np.array([False for _ in range(self.natoms)], dtype=np.bool_)
+            for i, atom_coord in enumerate(self._coords):
+                if left < atom_coord[1] < right:
+                    fm_local[i] = True
+            filter_mask *= fm_local
+
+        if 'z' in kwargs:
+            left, right = kwargs['z']
+            fm_local = np.array([False for _ in range(self.natoms)], dtype=np.bool_)
+            for i, atom_coord in enumerate(self._coords):
+                if left < atom_coord[2] < right:
+                    fm_local[i] = True
+            filter_mask *= fm_local
+
+        return np.array(range(self.natoms))[filter_mask]
 
 
 class StructureError(Exception):
