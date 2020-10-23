@@ -53,7 +53,7 @@ class DDEC:
                 break
 
         coords = np.zeros((natoms, 3))
-        species = np.zeros(natoms, dtype='<U1')
+        species = [0] * natoms
         net_charges = np.zeros(natoms)
         dipoles_xyz = np.zeros((natoms, 3))
         dipoles_mag = np.zeros(natoms)

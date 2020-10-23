@@ -165,7 +165,7 @@ class GM(ClassMethods):
 
         elementary_charge = 1.6e-19  # C
         k_1 = 1.38e-23  # J/K
-        const = - (1e6 * elementary_charge ** 2) / (4 * k_1 * self.sheet_area)  # micro F * K / cm^2
+        const = (1e6 * elementary_charge ** 2) / (4 * k_1 * self.sheet_area)  # micro F / cm^2
 
         if isinstance(dE_Q_arr, typing.Iterable):
 
@@ -352,7 +352,7 @@ class GM(ClassMethods):
         """
 
         if isinstance(self.C_EDL, numbers.Real):
-            if isinstance(V_std_pot_arr, typing.Sequence) and isinstance(overpot_arr, numbers.Real):
+            if isinstance(V_std_pot_arr, typing.Iterable) and isinstance(overpot_arr, numbers.Real):
                 k_HET = np.zeros_like(V_std_pot_arr)
                 if not add_info:
                     for i, V_std in tqdm(enumerate(V_std_pot_arr), total=len(V_std_pot_arr)):
@@ -379,7 +379,7 @@ class GM(ClassMethods):
                         y_redox_arr[i] = y_redox
                     return k_HET, dE_Q_arr, sigma_arr, E_F_redox_arr, y_fermi_arr, y_redox_arr
 
-            elif isinstance(overpot_arr, typing.Sequence) and isinstance(V_std_pot_arr, numbers.Real):
+            elif isinstance(overpot_arr, typing.Iterable) and isinstance(V_std_pot_arr, numbers.Real):
                 k_HET = np.zeros_like(overpot_arr)
                 if not add_info:
                     for i, overpot in tqdm(enumerate(overpot_arr), total=len(overpot_arr)):
@@ -453,7 +453,7 @@ class GM(ClassMethods):
                                  must be Real number')
 
         elif self.C_EDL == 'Q':
-            if isinstance(V_std_pot_arr, typing.Sequence) and isinstance(overpot_arr, numbers.Real):
+            if isinstance(V_std_pot_arr, typing.Iterable) and isinstance(overpot_arr, numbers.Real):
                 k_HET = np.zeros_like(V_std_pot_arr)
 
                 for i, V_std in tqdm(enumerate(V_std_pot_arr), total=len(V_std_pot_arr)):
@@ -473,7 +473,7 @@ class GM(ClassMethods):
 
                 return k_HET
 
-            elif isinstance(overpot_arr, typing.Sequence) and isinstance(V_std_pot_arr, numbers.Real):
+            elif isinstance(overpot_arr, typing.Iterable) and isinstance(V_std_pot_arr, numbers.Real):
                 k_HET = np.zeros_like(overpot_arr)
 
                 for i, overpot in tqdm(enumerate(overpot_arr), total=len(overpot_arr)):

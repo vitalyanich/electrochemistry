@@ -101,6 +101,15 @@ class Structure:
         else:
             self._species += species
 
+    def mod_delete_atoms(self, ids) -> None:
+        """
+        Delete selected atoms by ids
+        Args:
+            ids: sequence of atoms ids
+        """
+        self._coords = np.delete(self._coords, ids, axis=0)
+        self._species = np.delete(self._species, ids)
+
     def mod_change_atoms(self, ids, coords, species) -> None:
         """
         Change selected atom by id .
