@@ -171,16 +171,21 @@ class Poscar:
 
 class Outcar:
     """Class that reads VASP OUTCAR files"""
-    def __init__(self, nkpts, nbands, weights, nisteps, efermi, eigenvalues, occupations,
-                 efermi_hist=None, eigenvalues_hist=None, occupations_hist=None, energy_hist=None):
+
+    def __init__(self, nkpts, nbands, natoms, weights, nisteps, efermi_hist=None, eigenvalues_hist=None,
+                 occupations_hist=None, energy_hist=None, forces_hist=None):
         self.nkpts = nkpts
         self.nbands = nbands
+        self.natoms = natoms
         self.weights = weights
         self.nisteps = nisteps
-        self.efermi = efermi
-        self.eigenvalues = eigenvalues
-        self.occupations = occupations
 
+        self.efermi = efermi_hist[-1]
+        self.eigenvalues = eigenvalues_hist[-1]
+        self.occupations = occupations_hist[-1]
+        self.forces = forces_hist[-1]
+
+        self.forces_hist = forces_hist
         self.efermi_hist = efermi_hist
         self.eigenvalues_hist = eigenvalues_hist
         self.occupations_hist = occupations_hist
@@ -190,7 +195,7 @@ class Outcar:
     def _GaussianSmearing(x, x0, sigma):
         """Simulate the Delta function by a Gaussian shape function"""
 
-        return 1 / (np.sqrt(2 * np.pi) * sigma) * np.exp(-(x - x0)**2 / (2 * sigma**2))
+        return 1 / (np.sqrt(2 * np.pi) * sigma) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
     @staticmethod
     def from_file(filepath):
@@ -200,14 +205,17 @@ class Outcar:
 
         patterns = {'nkpts': 'k-points\s+NKPTS\s+=\s+(\d+)',
                     'nbands': 'number of bands\s+NBANDS=\s+(\d+)',
+                    'natoms': 'NIONS\s+=\s+(\d+)',
                     'weights': 'Following reciprocal coordinates:',
                     'efermi': 'E-fermi\s:\s+([-.\d]+)',
                     'energy': 'free energy\s+TOTEN\s+=\s+(.\d+\.\d+)\s+eV',
-                    'kpoints': r'k-point\s+(\d+)\s:\s+[-.\d]+\s+[-.\d]+\s+[-.\d]+\n'}
+                    'kpoints': r'k-point\s+(\d+)\s:\s+[-.\d]+\s+[-.\d]+\s+[-.\d]+\n',
+                    'forces': '\s+POSITION\s+TOTAL-FORCE'}
         matches = regrep(filepath, patterns)
 
         nbands = int(matches['nbands'][0][0][0])
         nkpts = int(matches['nkpts'][0][0][0])
+        natoms = int(matches['natoms'][0][0][0])
         energy_hist = ([float(i[0][0]) for i in matches['energy']])
 
         if nkpts == 1:
@@ -222,7 +230,6 @@ class Outcar:
         efermi_hist = np.zeros(len(arr))
         for i in range(len(arr)):
             efermi_hist[i] = float(arr[i][0][0])
-        efermi = efermi_hist[-1]
 
         nisteps = len(efermi_hist)
         eigenvalues_hist = np.zeros((nisteps, nkpts, nbands))
@@ -235,11 +242,17 @@ class Outcar:
                                                                               nkpts * step + kpoint, 1] + 2 + nbands]
                 eigenvalues_hist[step, kpoint] = [float(i.split()[1]) for i in arr]
                 occupations_hist[step, kpoint] = [float(i.split()[2]) for i in arr]
-        eigenvalues = eigenvalues_hist[-1]
-        occupations = occupations_hist[-1]
 
-        return Outcar(nkpts, nbands, weights, nisteps, efermi, eigenvalues, occupations,
-                      efermi_hist, eigenvalues_hist, occupations_hist, energy_hist)
+        arr = matches['forces']
+        forces_hist = np.zeros((nisteps, natoms, 3))
+        for step in range(nisteps):
+            for atom in range(natoms):
+                line = data[arr[step][1] + atom + 2:arr[step][1] + atom + 3]
+                line = line[0].split()
+                forces_hist[step, atom] = [float(line[3]), float(line[4]), float(line[5])]
+
+        return Outcar(nkpts, nbands, natoms, weights, nisteps, efermi_hist, eigenvalues_hist, occupations_hist,
+                      energy_hist, forces_hist)
 
     def get_band_eigs(self, bands):
         if type(bands) is int:
