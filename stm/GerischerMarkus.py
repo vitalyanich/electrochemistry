@@ -180,6 +180,30 @@ class GM(ClassMethods):
 
             return C_q_arr
 
+    def compute_C_total(self, E_diff_arr, add_info=False):
+
+        sigma_arr = np.zeros_like(E_diff_arr)
+        for i, E_diff in tqdm(enumerate(E_diff_arr), total=len(E_diff_arr)):
+            sigma_arr[i] = self.compute_sigma(E_diff, sigma_0=sigma_arr[i-1])
+
+        C_tot_arr = np.zeros_like(E_diff_arr)
+        C_Q_arr = np.zeros_like(E_diff_arr)
+
+        for i, (E_diff, sigma) in enumerate(zip(E_diff_arr, sigma_arr)):
+            i_1, i_2 = nearest_array_indices(self.sigma_Q_arr, sigma)
+            E_step = self.__SIGMA_ACCURACY
+            E_start = - self.__SIGMA_RANGE
+            dE_Q = (E_start + E_step * i_1 + E_start + E_step * i_2) / 2
+            C_Q = self.compute_C_quantum([dE_Q])
+            C_Q_arr[i] = C_Q[0]
+            C_tot = C_Q * self.C_EDL / (C_Q + self.C_EDL)
+            C_tot_arr[i] = C_tot
+
+        if add_info is False:
+            return C_tot_arr
+        else:
+            return C_tot_arr, C_Q_arr, sigma_arr
+
     def compute_sigma_EDL(self, dE_EDL):
         """
         Calculates charge corresponding to the potential drop of -dE_EDL/|e|.
@@ -238,6 +262,36 @@ class GM(ClassMethods):
         else:
             raise TypeError(f'Invalid type of dE_Q_arr: {type(dE_Q_arr)}')
 
+    def compute_sigma(self, E_diff, sigma_0=None):
+
+        def error_E_diff(sigma, E_diff, sigma_Q_arr):
+            i_1, i_2 = nearest_array_indices(sigma_Q_arr, sigma)
+            dE_Q = E_start + E_step * i_1
+            dE_EDL = - sigma / self.C_EDL
+            dE_total = dE_Q + dE_EDL
+
+            return (dE_total - E_diff) ** 2
+
+        for var in ['T', 'l', 'C_EDL']:
+            self.check_existence(var)
+
+        E_step = self.__SIGMA_ACCURACY
+        E_start = - self.__SIGMA_RANGE
+        if sigma_0 is None:
+            sigma_0 = self.__SIGMA_0
+        # check if we've already calculated sigma_Q_arr in another run
+        if self.sigma_Q_arr is None:
+            E_range = np.arange(E_start, -E_start, E_step)
+            sigma_Q_arr = self.compute_sigma_quantum(E_range)
+            self.sigma_Q_arr = sigma_Q_arr
+        else:
+            sigma_Q_arr = self.sigma_Q_arr
+
+        result = minimize(error_E_diff, np.array([sigma_0]), args=(E_diff, sigma_Q_arr))
+        sigma = result.x[0]
+
+        return sigma
+
     def compute_distributions(self, V_std, overpot=0, reverse=False, add_info=False):
         """Computes Fermi-Dirac and Redox species distributions according to Gerischer-Markus formalism
         with Quantum Capacitance
@@ -270,37 +324,13 @@ class GM(ClassMethods):
             The sum of two energy displacement of the electrode due to the difference in Fermi level of Redox couple
             and the electrode and overpotential. It splits into dE_Q and dE_EDL
         """
-        def error_E_diff(sigma, E_diff, sigma_Q_arr):
-            i_1, i_2 = nearest_array_indices(sigma_Q_arr, sigma)
-            dE_Q = E_start + E_step * i_1
-            dE_EDL = - sigma / self.C_EDL
-            dE_total = dE_Q + dE_EDL
-
-            return (dE_total - E_diff) ** 2
-
-        for var in ['T', 'l', 'C_EDL']:
-            self.check_existence(var)
-
-        # check if we've already calculated sigma_Q_arr in another run
-        if self.sigma_Q_arr is None:
-            E_step = self.__SIGMA_ACCURACY
-            E_start = - self.__SIGMA_RANGE
-            E_range = np.arange(E_start, -E_start, E_step)
-            sigma_Q_arr = self.compute_sigma_quantum(E_range)
-            sigma_0 = self.__SIGMA_0
-            self.sigma_Q_arr = sigma_Q_arr
-        else:
-            E_step = self.__SIGMA_ACCURACY
-            E_start = - self.__SIGMA_RANGE
-            sigma_0 = self.__SIGMA_0
-            sigma_Q_arr = self.sigma_Q_arr
 
         E_F_redox = E_F_SHE_VAC - self.efermi - V_std + self.vacuum_lvl - overpot
+        sigma = self.compute_sigma(E_F_redox)
 
-        result = minimize(error_E_diff, np.array([sigma_0]), args=(E_F_redox, sigma_Q_arr))
-        sigma = result.x[0]
-
-        i_1, i_2 = nearest_array_indices(sigma_Q_arr, sigma)
+        i_1, i_2 = nearest_array_indices(self.sigma_Q_arr, sigma)
+        E_step = self.__SIGMA_ACCURACY
+        E_start = - self.__SIGMA_RANGE
         dE_Q = E_start + E_step * i_1
 
         E_fermi = self.E - dE_Q
@@ -358,7 +388,7 @@ class GM(ClassMethods):
                     for i, V_std in tqdm(enumerate(V_std_pot_arr), total=len(V_std_pot_arr)):
                         y_fermi, y_redox = self.compute_distributions(V_std, reverse=reverse, overpot=overpot_arr)
                         integrand = self.DOS * y_fermi * y_redox
-                        k_HET[i] = integrate.simps(integrand, self.E)
+                        k_HET[i] = integrate.simps(integrand, self.E) / self.sheet_area
                     return k_HET
                 else:
                     dE_Q_arr = np.zeros_like(V_std_pot_arr)
@@ -371,7 +401,7 @@ class GM(ClassMethods):
                                                                                               overpot=overpot_arr,
                                                                                               add_info=add_info)
                         integrand = self.DOS * y_fermi * y_redox
-                        k_HET[i] = integrate.simps(integrand, self.E)
+                        k_HET[i] = integrate.simps(integrand, self.E) / self.sheet_area
                         dE_Q_arr[i] = dE_Q
                         sigma_arr[i] = sigma
                         E_F_redox_arr[i] = E_F_redox
@@ -385,7 +415,7 @@ class GM(ClassMethods):
                     for i, overpot in tqdm(enumerate(overpot_arr), total=len(overpot_arr)):
                         y_fermi, y_redox = self.compute_distributions(V_std_pot_arr, reverse=reverse, overpot=overpot)
                         integrand = self.DOS * y_fermi * y_redox
-                        k_HET[i] = integrate.simps(integrand, self.E)
+                        k_HET[i] = integrate.simps(integrand, self.E) / self.sheet_area
 
                     return k_HET
                 else:
@@ -400,7 +430,7 @@ class GM(ClassMethods):
                                                                                               overpot=overpot,
                                                                                               add_info=add_info)
                         integrand = self.DOS * y_fermi * y_redox
-                        k_HET[i] = integrate.simps(integrand, self.E)
+                        k_HET[i] = integrate.simps(integrand, self.E) / self.sheet_area
                         dE_Q_arr[i] = dE_Q
                         sigma_arr[i] = sigma
                         E_F_redox_arr[i] = E_F_redox
