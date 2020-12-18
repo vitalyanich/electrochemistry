@@ -319,6 +319,6 @@ class Outcar:
                     DOS_arr += weight * self._GaussianSmearing(E_arr, energy, sigma)
 
             if zero_at_fermi:
-                return E_arr - self.efermi, DOS_arr
+                return E_arr - self.efermi, 2 * DOS_arr
             else:
-                return E_arr, DOS_arr
+                return E_arr, 2 * DOS_arr
