@@ -271,6 +271,8 @@ class Outcar:
             raise ValueError('Variable bands should be int or iterable')
 
     def get_DOS(self, **kwargs):
+
+        # TODO: Add if smearing == False, add if smearing == "Lorenz", Check *2 electrons/states?
         """Calculate Density of States based on eigenvalues and its weights
 
         Args:
@@ -322,3 +324,25 @@ class Outcar:
                 return E_arr - self.efermi, DOS_arr
             else:
                 return E_arr, DOS_arr
+
+
+class Wavecar:
+    """Class that reads VASP WAVECAR files"""
+    # TODO: add useful functions for Wavecar class: plot charge density, plot real and imag parts etc.
+
+    def __init__(self, kb_array, wavefunctions, ngrid_factor):
+        self.kb_array = kb_array
+        self.wavefunctions = wavefunctions
+        self.ngrid_factor = ngrid_factor
+
+    @staticmethod
+    def from_file(filepath, kb_array, ngrid_factor=1.5):
+        from electrochemistry.core.vaspwfc_p3 import vaspwfc
+        wfc = vaspwfc(filepath)
+        wavefunctions = []
+        for kb in kb_array:
+            kpoint = kb[0]
+            band = kb[1]
+            wf = wfc.wfc_r(ikpt=kpoint, iband=band, ngrid=wfc._ngrid * ngrid_factor)
+            wavefunctions.append(wf)
+        return Wavecar(kb_array, wavefunctions, ngrid_factor)
