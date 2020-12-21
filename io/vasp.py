@@ -346,3 +346,8 @@ class Wavecar:
             wf = wfc.wfc_r(ikpt=kpoint, iband=band, ngrid=wfc._ngrid * ngrid_factor)
             wavefunctions.append(wf)
         return Wavecar(kb_array, wavefunctions, ngrid_factor)
+
+
+class Procar:
+    # TODO create Procar class
+    pass

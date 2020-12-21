@@ -14,6 +14,8 @@ class STM():
     This class is for computing 2D and 3D STM images with different theory levels:
     Tersoff-Hummann, Chen, analytical acceptor wavefucntions (oxygen)
     Also this class can calculate 2D ECSTM images using GerisherMarcus module
+
+    In current version of program this class is no more needed. Most of functions are relocated to kHET_spatial.py
     """
 
     PLANCK_CONSTANT = 4.135667662e-15  # Planck's constant in eV*s

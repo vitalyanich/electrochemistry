@@ -461,7 +461,7 @@ class Preprocessing():
                         if energy > Erange[0] and energy < Erange[1]:
                             e = int((energy - Erange[0]) / dE_new)
                             DOS_arr[step][e] += self.weights[k] / dE_new
-            return E_arr, DOS_arr
+            return E_arr, DOS_arr * 2
         else:
             Erange = [Erange_from_fermi[0] + self.efermi, Erange_from_fermi[1] + self.efermi]
             energies_number = int((Erange[1] - Erange[0]) / dE)
@@ -474,7 +474,7 @@ class Preprocessing():
                     if energy > Erange[0] and energy < Erange[1]:
                         e = int((energy - Erange[0]) / dE_new)
                         DOS_arr[e]+=self.weights[k] / dE_new
-            return E_arr, DOS_arr, dE_new
+            return E_arr, DOS_arr * 2, dE_new
 
     def get_pdos(self, Erange_from_fermi, dE, ions='all', orbitals='all', dir_to_data=None):
         if dir_to_data == None:
@@ -533,7 +533,7 @@ class Preprocessing():
                         for orb in list_of_orbitals:
                             weight+=self.procar_data[k][b][ion][orb]
                     DOS_arr[e] += weight / dE_new * self.weights[k]
-        return E_arr, DOS_arr, dE_new
+        return E_arr, DOS_arr * 2, dE_new
 
 if __name__=='__main__':
     t=time.time()

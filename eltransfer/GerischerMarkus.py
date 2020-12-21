@@ -26,7 +26,7 @@ class GM(ClassMethods):
     vacuum_lvl: np.ndarray, optional
         System vacuum level. If not specified values will be taken from saved data.
     """
-    def __init__(self, DOS=None, E=None, efermi=None, vacuum_lvl=None):
+    def __init__(self, path_to_data='Saved_data', DOS=None, E=None, efermi=None, vacuum_lvl=None):
         # variables that might be defined through __init__ function
         self.E = E
         self.DOS = DOS
@@ -49,25 +49,25 @@ class GM(ClassMethods):
 
         if DOS is None:
             try:
-                self.DOS = np.load('Saved_data/DOS.npy')
+                self.DOS = np.load(path_to_data + '/DOS.npy')
             except OSError:
                 print('File DOS.npy does not exist')
 
         if E is None:
             try:
-                self.E = np.load('Saved_data/E.npy')
+                self.E = np.load(path_to_data + '/E.npy')
             except OSError:
                 print('File E_DOS.npy does not exist')
 
         if efermi is None:
             try:
-                self.efermi = np.load('Saved_data/efermi.npy')
+                self.efermi = np.load(path_to_data + '/efermi.npy')
             except OSError:
                 print('File efermi.npy does not exist')
 
         if vacuum_lvl is None:
             try:
-                self.vacuum_lvl = np.load('Saved_data/vacuum_lvl.npy')
+                self.vacuum_lvl = np.load(path_to_data + '/vacuum_lvl.npy')
             except OSError:
                 print('File vacuum_lvl.npy does not exist')
 
