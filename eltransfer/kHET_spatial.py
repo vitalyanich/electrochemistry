@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from electrochemistry.core import constants
+from electrochemistry.io import vasp
 
 class kHET():
     """
@@ -13,12 +14,14 @@ class kHET():
     AVAILABLE_TIPS_TYPES = ['oxygen', 'IrCl6', 'RuNH3_6', 'RuNH3_6_NNN_plane', 'RuNH3_6_perpendicular',
                                  'oxygen_parallel_x', 'oxygen_parallel_y']
 
-    def __init__(self, wavecar, outcar, poscar, path_to_data='Saved_data'):
-
-        self.wavecar = wavecar
-        self.outcar = outcar
-        self.poscar = poscar
-        self.path_to_data = path_to_data
+    def __init__(self, working_folder=''):
+        if working_folder == '':
+            working_folder = '.'
+        self.outcar = vasp.Outcar.from_file(working_folder + '/OUTCAR')
+        self.poscar = vasp.Poscar.from_file(working_folder + '/POSCAR')
+        self.working_folder = working_folder
+        self.path_to_data = working_folder + '/Saved_data'
+        self.wavecar = None
 
         self.C_EDL = None
         self.T = None
@@ -27,9 +30,11 @@ class kHET():
         self.V_std = None
         self.overpot = None
         self.dE_Q = None
+        self.kb_array = None
+        self.E = None
 
 
-    def set_parameters(self, T, lambda_, overpot, V_std=None, C_EDL=None, dE_Q=None, linear_constant=26):
+    def set_parameters(self, T, lambda_, overpot=0, V_std=None, C_EDL=None, dE_Q=None, linear_constant=26, threshold_value=1e-5):
         """
         :param C_EDL: float
         Capacitance of electric double layer (microF/cm^2)
@@ -43,6 +48,8 @@ class kHET():
         Overpotential (Volts). It shifts the electrode Fermi energy to -|e|*overpot
         :return:
         """
+        #TODO chack get_DOS parameters
+        self.E, DOS = self.outcar.get_DOS(zero_at_fermi=True, smearing='Gaussian', sigma=0.1, dE = 0.01)
         self.T = T
         self.lambda_ = lambda_
         self.overpot = overpot
@@ -50,14 +57,38 @@ class kHET():
         self.linear_constant = linear_constant
         if V_std == None or C_EDL == None:
             if dE_Q == None:
-                raise ValueError ("Set V_std and C_EDL or dE_Q parameter")
+                raise ValueError ("Set either V_std and C_EDL or dE_Q parameter")
             else:
                 self.dE_Q = dE_Q
         else:
             self.V_std = V_std
             self.C_EDL = C_EDL
             self.dE_Q = self._calculate_dE_Q()
+        self.kb_array = self._get_kb_array(threshold_value)
 
+    def load_wavecar(self):
+        self.wavecar = vasp.Wavecar.from_file(self.working_folder+'/WAVECAR', self.kb_array)
+
+    def plot_distributions(self):
+        #TODO make it
+        pass
+
+    def _get_kb_array(self, threshold_value):
+        fermi_distribution = GM.fermi_func(self.E - self.dE_Q, self.T)
+        W_ox = GM.W_ox(self.E - self.dE_Q - self.overpot, self.T, self.lambda_)
+        E_satisfy_mask = W_ox * fermi_distribution > np.max(W_ox) * np.max(fermi_distribution) * threshold_value
+        list_of_E_indices = [i for i, E in enumerate(E_satisfy_mask) if E]
+        min_E_ind = min(list_of_E_indices)
+        max_E_ind = max(list_of_E_indices)
+        Erange = [self.E[min_E_ind], self.E[max_E_ind]]
+
+        kb_array = []
+        for band in range(1, self.outcar.nbands + 1):
+            for kpoint in range(1, self.outcar.nkpts + 1):
+                energy = self.outcar.eigenvalues[kpoint - 1][band - 1]
+                if energy >= Erange[0] and energy < Erange[1]:
+                    kb_array.append([kpoint, band])
+        return kb_array
 
     def calculate_kHET_spatial(self, tip_type='s', z_pos=None, from_center=False, cutoff_in_Angstroms=5, all_z=False, dim='2D'):
         xlen, ylen, zlen = np.shape(self.wavecar.wavefunctions[0])
@@ -165,10 +196,6 @@ class kHET():
         k_HET_ *= 2 * np.pi / constants.PLANCK_CONSTANT
         return k_HET_
 
-    @staticmethod
-    def get_E_mask(fermi_distribution, W_ox, threshold_value=1e-8):
-        return W_ox * fermi_distribution > np.max(W_ox) * np.max(fermi_distribution) * threshold_value
-
     def plot_2D(self, func, show=True, save=False, filename='fig.png'):
         """
         Function for plotting 2D images
@@ -207,18 +234,16 @@ class kHET():
         and Fermi-Dirac distribution according to Gerischer-Marcus formalism
         :return:
         """
-        gm = GM(path_to_data = self.path_to_data)
+        gm = GM(path_to_data=self.path_to_data)
         gm.set_params(self.C_EDL, self.T, self.lambda_, self.sheet_area)
         return gm.compute_distributions(self.V_std, overpot=self.overpot, add_info=True)[2]
-
 
     def _get_sheet_area(self):
         """
         Inner function to calculate sheet_area (XY plane) in cm^2
         """
         b1, b2, b3 = self.poscar._structure.lattice
-        return np.linalg.norm(np.cross(b1,b2))*1e-16
-
+        return np.linalg.norm(np.cross(b1, b2))*1e-16
 
     def generate_acceptor_orbitals(self, orb_type, shape, z_shift=0, x_shift=0, y_shift=0):
         """
@@ -314,7 +339,6 @@ class kHET():
                                    orbital[xmin:xmax, ymin:ymax, zmin:zmax]))
                 overlap_integrals_squared[i][j] = max(integral) ** 2
         return overlap_integrals_squared
-
 
     def save_as_cube(self, array, name, dir):
         # TODO: rewrite
