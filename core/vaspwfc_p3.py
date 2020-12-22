@@ -8,7 +8,7 @@ In lines: 274 276 278 325 429 431 444 468 469 480 481 711 713 715 /2 changed to 
 import os
 import numpy as np
 from math import sqrt
-from vasp_constant import *
+from .vasp_constant import *
 from multiprocessing import cpu_count
 from scipy.fftpack import fftfreq, fftn, ifftn
 

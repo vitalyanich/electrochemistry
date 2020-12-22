@@ -11,6 +11,8 @@ class kHET():
     """
     This class calculates heterogeneous electron transfer rate constant with spatial resolution
     """
+    # TODO update tips types
+
     AVAILABLE_TIPS_TYPES = ['oxygen', 'IrCl6', 'RuNH3_6', 'RuNH3_6_NNN_plane', 'RuNH3_6_perpendicular',
                                  'oxygen_parallel_x', 'oxygen_parallel_y']
 
@@ -65,6 +67,8 @@ class kHET():
             self.C_EDL = C_EDL
             self.dE_Q = self._calculate_dE_Q()
         self.kb_array = self._get_kb_array(threshold_value)
+        if self.kb_array == []:
+            print('Error! kb_array is empty. Try to decrease threshold_value')
 
     def load_wavecar(self):
         self.wavecar = vasp.Wavecar.from_file(self.working_folder+'/WAVECAR', self.kb_array)
@@ -85,7 +89,7 @@ class kHET():
         kb_array = []
         for band in range(1, self.outcar.nbands + 1):
             for kpoint in range(1, self.outcar.nkpts + 1):
-                energy = self.outcar.eigenvalues[kpoint - 1][band - 1]
+                energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
                 if energy >= Erange[0] and energy < Erange[1]:
                     kb_array.append([kpoint, band])
         return kb_array
@@ -130,23 +134,22 @@ class kHET():
                     zmax = zlen
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1]
+                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
                     weight = self.outcar.weights[kpoint - 1]
-                    e_fermi = self.outcar.efermi
-                    f_fermi = GM.fermi_func(energy - e_fermi - self.dE_Q, self.T)
+                    f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                     w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                     overlap_integrals_squared = self._get_overlap_integrals_squared(self.wavecar.wavefunctions[i], cutoff,
                                                                                     acc_orbitals, zmin, zmax)
+                    # TODO check eq below
                     matrix_elements_squared = overlap_integrals_squared * self.linear_constant * np.linalg.norm(bn3) ** 3
                     k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
 
             elif tip_type == 's':
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1]
-                    e_fermi = self.outcar.efermi
+                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
                     weight = self.outcar.weights[kpoint - 1]
-                    f_fermi = GM.fermi_func(energy - e_fermi - self.dE_Q, self.T)
+                    f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                     w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                     matrix_elements_squared = np.abs(self.wavecar.wavefunctions[i][:, :, z]) ** 2
                     k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
@@ -154,10 +157,9 @@ class kHET():
             elif tip_type == 'pz':
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1]
+                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
                     weight = self.outcar.weights[kpoint - 1]
-                    e_fermi = self.outcar.efermi
-                    f_fermi = GM.fermi_func(energy - e_fermi - self.dE_Q, self.T)
+                    f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                     w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                     wf_grad_z = np.gradient(self.wavecar.wavefunctions[i], axis=2)
                     matrix_elements_squared = np.abs(wf_grad_z[:, :, z]) ** 2
@@ -167,13 +169,13 @@ class kHET():
 
         elif dim == '3D':
             k_HET_ = np.zeros((xlen, ylen, zlen))
+
             if tip_type == 's':
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1]
-                    e_fermi = self.outcar.efermi
+                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
                     weight = self.outcar.weights[kpoint - 1]
-                    f_fermi = GM.fermi_func(energy - e_fermi - self.dE_Q, self.T)
+                    f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                     w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                     matrix_elements_squared = np.abs(self.wavecar.wavefunctions[i]) ** 2
                     k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
@@ -181,10 +183,9 @@ class kHET():
             elif tip_type == 'pz':
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1]
+                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
                     weight = self.outcar.weights[kpoint - 1]
-                    e_fermi = self.outcar.efermi
-                    f_fermi = GM.fermi_func(energy - e_fermi - self.dE_Q, self.T)
+                    f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                     w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                     wf_grad_z = np.gradient(self.wavecar.wavefunctions[i], axis=2)
                     matrix_elements_squared = np.abs(wf_grad_z) ** 2
@@ -193,7 +194,8 @@ class kHET():
         else:
             raise ValueError("dim should be 3D or 2D")
 
-        k_HET_ *= 2 * np.pi / constants.PLANCK_CONSTANT
+        # TODO: check THIS below
+        #k_HET_ *= 2 * np.pi / constants.PLANCK_CONSTANT
         return k_HET_
 
     def plot_2D(self, func, show=True, save=False, filename='fig.png'):
@@ -348,7 +350,7 @@ class kHET():
             os.mkdir(dir)
 
         shape = np.shape(array)
-        with open('POSCAR') as inf: #TODO get data from poscar class would be better
+        with open(self.working_folder + '/POSCAR') as inf: #TODO get data from poscar class would be better
             lines = inf.readlines()
             natoms = sum(map(int, lines[6].strip().split()))
             atomtypes = lines[5].strip().split()
