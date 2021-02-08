@@ -172,23 +172,33 @@ class Poscar:
 class Outcar:
     """Class that reads VASP OUTCAR files"""
 
-    def __init__(self, nkpts, nbands, natoms, weights, nisteps, efermi_hist=None, eigenvalues_hist=None,
+    def __init__(self, nkpts, nbands, natoms, weights, nisteps, spin_restricted, efermi_hist=None, eigenvalues_hist=None,
                  occupations_hist=None, energy_hist=None, forces_hist=None):
         self.nkpts = nkpts
         self.nbands = nbands
         self.natoms = natoms
         self.weights = weights
         self.nisteps = nisteps
+        self.spin_restricted = spin_restricted
 
         self.efermi = efermi_hist[-1]
-        self.eigenvalues = eigenvalues_hist[-1]
-        self.occupations = occupations_hist[-1]
         self.forces = forces_hist[-1]
+
+        if not spin_restricted:
+            self.eigenvalues = eigenvalues_hist[-1][0]
+            self.occupations = occupations_hist[-1][0]
+        else:
+            self.eigenvalues = eigenvalues_hist[-1]
+            self.occupations = occupations_hist[-1]
 
         self.forces_hist = forces_hist
         self.efermi_hist = efermi_hist
-        self.eigenvalues_hist = eigenvalues_hist
-        self.occupations_hist = occupations_hist
+        if not spin_restricted:
+            self.eigenvalues_hist = eigenvalues_hist[:,0,:,:]
+            self.occupations_hist = occupations_hist[:,0,:,:]
+        else:
+            self.eigenvalues_hist = eigenvalues_hist
+            self.occupations_hist = occupations_hist
         self.energy_hist = energy_hist
 
     @staticmethod
@@ -210,13 +220,21 @@ class Outcar:
                     'efermi': 'E-fermi\s:\s+([-.\d]+)',
                     'energy': 'free energy\s+TOTEN\s+=\s+(.\d+\.\d+)\s+eV',
                     'kpoints': r'k-point\s+(\d+)\s:\s+[-.\d]+\s+[-.\d]+\s+[-.\d]+\n',
-                    'forces': '\s+POSITION\s+TOTAL-FORCE'}
+                    'forces': '\s+POSITION\s+TOTAL-FORCE',
+                    'spin': 'spin component \d+\n'}
         matches = regrep(filepath, patterns)
 
         nbands = int(matches['nbands'][0][0][0])
         nkpts = int(matches['nkpts'][0][0][0])
         natoms = int(matches['natoms'][0][0][0])
         energy_hist = ([float(i[0][0]) for i in matches['energy']])
+
+        if matches['spin'] != []:
+            spin_restricted = True
+            nspin = 2
+        else:
+            spin_restricted = False
+            nspin = 1
 
         if nkpts == 1:
             weights = data[matches['weights'][0][1] + 2].split()[3]
@@ -232,16 +250,17 @@ class Outcar:
             efermi_hist[i] = float(arr[i][0][0])
 
         nisteps = len(efermi_hist)
-        eigenvalues_hist = np.zeros((nisteps, nkpts, nbands))
-        occupations_hist = np.zeros((nisteps, nkpts, nbands))
+        eigenvalues_hist = np.zeros((nisteps, nspin, nkpts, nbands))
+        occupations_hist = np.zeros((nisteps, nspin, nkpts, nbands))
 
         each_kpoint_list = np.array([[int(j[0][0]), int(j[1])] for j in matches['kpoints']])
         for step in range(nisteps):
-            for kpoint in range(nkpts):
-                arr = data[each_kpoint_list[nkpts * step + kpoint, 1] + 2:each_kpoint_list[
-                                                                              nkpts * step + kpoint, 1] + 2 + nbands]
-                eigenvalues_hist[step, kpoint] = [float(i.split()[1]) for i in arr]
-                occupations_hist[step, kpoint] = [float(i.split()[2]) for i in arr]
+            for spin in range(nspin):
+                for kpoint in range(nkpts):
+                    arr = data[each_kpoint_list[nkpts * step * spin + kpoint, 1] + 2:each_kpoint_list[
+                                                                              nkpts * step * spin + kpoint, 1] + 2 + nbands]
+                    eigenvalues_hist[step, spin, kpoint] = [float(i.split()[1]) for i in arr]
+                    occupations_hist[step, spin, kpoint] = [float(i.split()[2]) for i in arr]
 
         arr = matches['forces']
         forces_hist = np.zeros((nisteps, natoms, 3))
@@ -251,8 +270,9 @@ class Outcar:
                 line = line[0].split()
                 forces_hist[step, atom] = [float(line[3]), float(line[4]), float(line[5])]
 
-        return Outcar(nkpts, nbands, natoms, weights, nisteps, efermi_hist, eigenvalues_hist, occupations_hist,
+        return Outcar(nkpts, nbands, natoms, weights, nisteps, spin_restricted, efermi_hist, eigenvalues_hist, occupations_hist,
                       energy_hist, forces_hist)
+
 
     def get_band_eigs(self, bands):
         if type(bands) is int:
@@ -315,15 +335,24 @@ class Outcar:
             else:
                 E_max = np.max(self.eigenvalues)
             E_arr = np.arange(E_min, E_max, dE)
-            DOS_arr = np.zeros_like(E_arr)
-            for energy_kpt, weight in zip(self.eigenvalues, self.weights):
-                for energy in energy_kpt:
-                    DOS_arr += weight * self._GaussianSmearing(E_arr, energy, sigma)
+
+            if not self.spin_restricted:
+                DOS_arr = np.zeros_like(E_arr)
+                for energy_kpt, weight in zip(self.eigenvalues, self.weights):
+                    for energy in energy_kpt:
+                        DOS_arr += 2 * weight * self._GaussianSmearing(E_arr, energy, sigma)
+                        # 2 above means occupancy for spin unrestricted calculation
+            else:
+                DOS_arr = np.zeros((2,) + np.shape(E_arr))
+                for spin in range(2):
+                    for energy_kpt, weight in zip(self.eigenvalues[spin], self.weights):
+                        for energy in energy_kpt:
+                            DOS_arr[spin] += weight * self._GaussianSmearing(E_arr, energy, sigma)
 
             if zero_at_fermi:
-                return E_arr - self.efermi, 2 * DOS_arr
+                return E_arr - self.efermi, DOS_arr
             else:
-                return E_arr, 2 * DOS_arr
+                return E_arr, DOS_arr
 
 
 class Wavecar:
@@ -351,3 +380,41 @@ class Wavecar:
 class Procar:
     # TODO create Procar class
     pass
+
+class Chgcar:
+    """
+    Class for reading CHG and CHGCAR files from vasp
+    For now, we ignore augmentation occupancies data
+    """
+    def __init__(self, poscar, data):
+        self.poscar = poscar
+        self.data = data
+
+    @staticmethod
+    def from_file(filepath):
+        poscar = Poscar.from_file(filepath)
+        natoms = poscar._structure.natoms
+        start_atom = 8
+        start_volumetric_data = start_atom + natoms + 2
+
+        file = open(filepath, 'r')
+        data = file.readlines()
+        file.close()
+        shape = list(map(int, data[start_volumetric_data - 1].strip().split()))
+
+        volumetric_data = " ".join(data[start_volumetric_data:]).strip().split()
+        try:
+            i = volumetric_data.index('augmentation')
+        except:
+            i = None
+        volumetric_data = np.array(list(map(float, volumetric_data[:i])))
+        volumetric_data = np.reshape(volumetric_data, shape)
+        return Chgcar(poscar, volumetric_data)
+
+    def convert_to_cube(self):
+        #TODO write converter
+        pass
+
+    def to_file(self, filepath):
+        #TODO write to_file func
+        pass
