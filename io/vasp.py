@@ -257,8 +257,8 @@ class Outcar:
         for step in range(nisteps):
             for spin in range(nspin):
                 for kpoint in range(nkpts):
-                    arr = data[each_kpoint_list[nkpts * step * spin + kpoint, 1] + 2:each_kpoint_list[
-                                                                              nkpts * step * spin + kpoint, 1] + 2 + nbands]
+                    arr = data[each_kpoint_list[nkpts * nspin * step + nkpts * spin + kpoint, 1] + 2:each_kpoint_list[
+                                                nkpts * nspin * step + nkpts * spin + kpoint, 1] + 2 + nbands]
                     eigenvalues_hist[step, spin, kpoint] = [float(i.split()[1]) for i in arr]
                     occupations_hist[step, spin, kpoint] = [float(i.split()[2]) for i in arr]
 
