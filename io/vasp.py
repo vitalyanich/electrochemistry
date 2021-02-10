@@ -386,30 +386,52 @@ class Chgcar:
     Class for reading CHG and CHGCAR files from vasp
     For now, we ignore augmentation occupancies data
     """
-    def __init__(self, poscar, data):
-        self.poscar = poscar
-        self.data = data
+    def __init__(self, structure, charge_density, spin_density=None):
+        self.structure = structure
+        self.charge_density = charge_density
+        self.spin_density = spin_density
 
     @staticmethod
     def from_file(filepath):
         poscar = Poscar.from_file(filepath)
-        natoms = poscar._structure.natoms
-        start_atom = 8
-        start_volumetric_data = start_atom + natoms + 2
+        structure = poscar._structure
+
+        with open(filepath, 'r') as inf:
+            shapes = []
+            start_lines = []
+            for i, line in enumerate(inf):
+                line_data = line.strip().split()
+                if len(line_data) == 3:
+                    try:
+                        s = np.array(list(map(int, line_data)))
+                    except:
+                        pass
+                    else:
+                        start_lines.append(i+1)
+                        shapes.append(s)
 
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
-        shape = list(map(int, data[start_volumetric_data - 1].strip().split()))
 
-        volumetric_data = " ".join(data[start_volumetric_data:]).strip().split()
-        try:
-            i = volumetric_data.index('augmentation')
-        except:
-            i = None
-        volumetric_data = np.array(list(map(float, volumetric_data[:i])))
-        volumetric_data = np.reshape(volumetric_data, shape)
-        return Chgcar(poscar, volumetric_data)
+        start = start_lines[0]
+        shape = shapes[0]
+        length = np.prod(shape)
+        charge_density = " ".join(data[start:]).strip().split()
+        charge_density = np.array(list(map(float, charge_density[:length])))
+        charge_density = np.reshape(charge_density, shape)
+        if len(start_lines) == 1:
+            return Chgcar(structure, charge_density)
+        elif len(start_lines) == 2:
+            start2 = start_lines[1]
+            shape2 = shapes[1]
+            length2 = np.prod(shape2)
+            spin_density = " ".join(data[start2:]).strip().split()
+            spin_density = np.array(list(map(float, spin_density[:length2])))
+            spin_density = np.reshape(spin_density, shape2)
+            return Chgcar(structure, charge_density, spin_density)
+        else:
+            raise ValueError('The file contains more than 2 volumetric data')
 
     def convert_to_cube(self):
         #TODO write converter
