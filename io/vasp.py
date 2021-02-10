@@ -2,6 +2,7 @@ import numpy as np
 from typing import Union, List, Iterable
 from monty.re import regrep
 from electrochemistry.core.structure import Structure
+from electrochemistry.io.universal import Cube
 
 
 class Poscar:
@@ -399,8 +400,8 @@ class Chgcar:
         volumetric_data = []
         read_data = False
 
-        with open(filepath, 'r') as inf:
-            for line in inf:
+        with open(filepath, 'r') as file:
+            for line in file:
                 line_data = line.strip().split()
                 if read_data:
                     for value in line_data:
@@ -435,9 +436,20 @@ class Chgcar:
         else:
             raise ValueError(f'The file contains more than 2 volumetric data, len = {len(volumetric_data)}')
 
-    def convert_to_cube(self):
-        #TODO write converter
-        pass
+    def convert_to_cube(self, volumetric_data='charge_density'):
+        comment = '  Cube file was created using Electrochenistry package\n'
+        if volumetric_data == 'charge_density':
+            return Cube(self.structure, comment + '  Charge Density\n', np.array(list(self.charge_density.shape)),
+                        np.zeros(self.structure.natoms), self.charge_density)
+        elif volumetric_data == 'spin_density':
+            return Cube(self.structure, comment + '  Spin Density\n', np.array(list(self.spin_density.shape)),
+                        np.zeros(self.structure.natoms), self.spin_density)
+        elif volumetric_data == 'spin_major':
+            return Cube(self.structure, comment + '  Major Spin\n', np.array(list(self.spin_density.shape)),
+                        np.zeros(self.structure.natoms), (self.charge_density + self.spin_density) / 2)
+        elif volumetric_data == 'spin_minor':
+            return Cube(self.structure, comment + '  Minor Spin\n', np.array(list(self.spin_density.shape)),
+                        np.zeros(self.structure.natoms), (self.charge_density - self.spin_density) / 2)
 
     def to_file(self, filepath):
         #TODO write to_file func

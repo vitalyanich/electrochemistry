@@ -78,19 +78,31 @@ class Cube:
     def to_file(self, filepath):
         with open(filepath, 'w') as file:
             file.write(self.comment)
-            file.write(f'  {self.structure.natoms}    0.000000    0.000000    0.000000\n')
+
+            width_Ni = len(str(np.max(self.Ns)))
+            width_lattice = len(str(int(np.max(self.structure.lattice)))) + 7
+            if np.sum(self.structure.lattice < 0):
+                width_lattice += 1
+            width_coord = len(str(int(np.max(self.structure.coords)))) + 7
+            if np.sum(self.structure.coords < 0):
+                width_coord += 1
+            width = np.max([width_lattice, width_coord])
+
+            file.write(f'  {self.structure.natoms:{width_Ni}}    {0:{width}.6f}    {0:{width}.6f}    {0:{width}.6f}\n')
+
             for N_i, lattice_vector in zip(self.Ns, self.structure.lattice * Angstrom2Bohr):
                 lattice_vector = lattice_vector / N_i
-                file.write(f'{N_i}  {lattice_vector[0]:.6}  {lattice_vector[1]:.6}  {lattice_vector[2]:.6}\n')
+                file.write(f'  {N_i:{width_Ni}}    {lattice_vector[0]:{width}.6f}    {lattice_vector[1]:{width}.6f}    {lattice_vector[2]:{width}.6f}\n')
 
             if not self.structure.coords_are_cartesian:
                 self.structure.mod_coords_to_cartesian()
 
             for atom_name, charge, coord in zip(self.structure.species, self.charges,
                                                 Angstrom2Bohr * self.structure.coords):
-                file.write(f'{ElemName2Num[atom_name]}  {charge:.6}  {coord[0]:.6}  {coord[1]:.6}  {coord[2]:.6}\n')
+                file.write(f'  {ElemName2Num[atom_name]:{width_Ni}}    {charge:{width}.6f}    {coord[0]:{width}.6f}    {coord[1]:{width}.6f}    {coord[2]:{width}.6f}\n')
 
             counter = 0
+            file.write('  ')
             for i in range(self.Ns[0]):
                 for j in range(self.Ns[1]):
                     for k in range(self.Ns[2]):
@@ -98,7 +110,6 @@ class Cube:
                         counter += 1
                         if counter % 6 == 0:
                             file.write('\n  ')
-                    file.write('\n  ')
 
     def get_average_along_axis(self, axis):
         """
