@@ -401,40 +401,39 @@ class Chgcar:
 
         with open(filepath, 'r') as inf:
             for line in inf:
+                line_data = line.strip().split()
                 if read_data:
-                        if counter < nstrings:
-                            for value in line.strip().split():
-                                data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
-                                i+=1
-                            counter += 1
+                    for value in line_data:
+                        if i < length - 1:
+                            data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
+                            i += 1
                         else:
+                            data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
                             read_data = False
                             volumetric_data.append(data)
-
-                line_data = line.strip().split()
-                if len(line_data) == 3:
-                    try:
-                        shape = np.array(list(map(int, line_data)))
-                    except:
-                        pass
-                    else:
-                        read_data = True
-                        nx, ny, nz = shape
-                        nstrings = np.prod(shape) // 10 + 1
-                        data = np.zeros(shape)
-                        i = 0
-                        counter = 0
-                        indexes = np.arange(0, np.prod(shape))
-                        indexes_1 = indexes % nx
-                        indexes_2 = (indexes // nx) % ny
-                        indexes_3 = indexes // (nx * ny)
+                else:
+                    if len(line_data) == 3:
+                        try:
+                            shape = np.array(list(map(int, line_data)))
+                        except:
+                            pass
+                        else:
+                            read_data = True
+                            nx, ny, nz = shape
+                            data = np.zeros(shape)
+                            length = np.prod(shape)
+                            i = 0
+                            indexes = np.arange(0, length)
+                            indexes_1 = indexes % nx
+                            indexes_2 = (indexes // nx) % ny
+                            indexes_3 = indexes // (nx * ny)
 
         if len(volumetric_data) == 1:
             return Chgcar(structure, volumetric_data[0])
         elif len(volumetric_data) == 2:
             return Chgcar(structure, volumetric_data[0], volumetric_data[1])
         else:
-            raise ValueError('The file contains more than 2 volumetric data')
+            raise ValueError(f'The file contains more than 2 volumetric data, len = {len(volumetric_data)}')
 
     def convert_to_cube(self):
         #TODO write converter
