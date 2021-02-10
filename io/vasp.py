@@ -2,6 +2,7 @@ import numpy as np
 from typing import Union, List, Iterable
 from monty.re import regrep
 from electrochemistry.core.structure import Structure
+from pymatgen.io.vasp.outputs import Chgcar as Chgcar_pymatgen
 
 
 class Poscar:
@@ -396,40 +397,43 @@ class Chgcar:
         poscar = Poscar.from_file(filepath)
         structure = poscar._structure
 
+        volumetric_data = []
+        read_data = False
+
         with open(filepath, 'r') as inf:
-            shapes = []
-            start_lines = []
-            for i, line in enumerate(inf):
+            for line in inf:
+                if read_data:
+                        if counter < nstrings:
+                            for value in line.strip().split():
+                                data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
+                                i+=1
+                            counter += 1
+                        else:
+                            read_data = False
+                            volumetric_data.append(data)
+
                 line_data = line.strip().split()
                 if len(line_data) == 3:
                     try:
-                        s = np.array(list(map(int, line_data)))
+                        shape = np.array(list(map(int, line_data)))
                     except:
                         pass
                     else:
-                        start_lines.append(i+1)
-                        shapes.append(s)
+                        read_data = True
+                        nx, ny, nz = shape
+                        nstrings = np.prod(shape) // 10 + 1
+                        data = np.zeros(shape)
+                        i = 0
+                        counter = 0
+                        indexes = np.arange(0, np.prod(shape))
+                        indexes_1 = indexes % nx
+                        indexes_2 = (indexes // nx) % ny
+                        indexes_3 = indexes // (nx * ny)
 
-        file = open(filepath, 'r')
-        data = file.readlines()
-        file.close()
-
-        start = start_lines[0]
-        shape = shapes[0]
-        length = np.prod(shape)
-        charge_density = " ".join(data[start:]).strip().split()
-        charge_density = np.array(list(map(float, charge_density[:length])))
-        charge_density = np.reshape(charge_density, shape)
-        if len(start_lines) == 1:
-            return Chgcar(structure, charge_density)
-        elif len(start_lines) == 2:
-            start2 = start_lines[1]
-            shape2 = shapes[1]
-            length2 = np.prod(shape2)
-            spin_density = " ".join(data[start2:]).strip().split()
-            spin_density = np.array(list(map(float, spin_density[:length2])))
-            spin_density = np.reshape(spin_density, shape2)
-            return Chgcar(structure, charge_density, spin_density)
+        if len(volumetric_data) == 1:
+            return Chgcar(structure, volumetric_data[0])
+        elif len(volumetric_data) == 2:
+            return Chgcar(structure, volumetric_data[0], volumetric_data[1])
         else:
             raise ValueError('The file contains more than 2 volumetric data')
 
