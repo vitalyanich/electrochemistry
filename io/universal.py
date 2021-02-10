@@ -1,5 +1,5 @@
 import numpy as np
-from electrochemistry.core.constants import ElemNum2Name, Bohr2Angstom
+from electrochemistry.core.constants import ElemNum2Name, ElemName2Num, Bohr2Angstrom, Angstrom2Bohr
 from electrochemistry.core.structure import Structure
 
 
@@ -56,8 +56,8 @@ class Cube:
                 coords[atom, :] = line[2:]
 
             if units == 'Bohr':
-                lattice = Bohr2Angstom * lattice
-                coords = Bohr2Angstom * coords
+                lattice = Bohr2Angstrom * lattice
+                coords = Bohr2Angstrom * coords
 
             structure = Structure(lattice, species, coords, coords_are_cartesian=True)
 
@@ -73,15 +73,32 @@ class Cube:
                     data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
                     i += 1
 
-            #data = np.loadtxt(file).reshape((NX, NY, NZ))
-
-            #i = 0
-            #for line in file:
-            #    for value in line.split():
-            #        data[int(i / (NY * NZ)), int((i / NZ) % NY), int(i % NZ)] = float(value)
-            #        i += 1
-
             return Cube(structure, comment, np.array([NX, NY, NZ]), charges, data)
+
+    def to_file(self, filepath):
+        with open(filepath, 'w') as file:
+            file.write(self.comment)
+            file.write(f'  {self.structure.natoms}    0.000000    0.000000    0.000000\n')
+            for N_i, lattice_vector in zip(self.Ns, self.structure.lattice * Angstrom2Bohr):
+                lattice_vector = lattice_vector / N_i
+                file.write(f'{N_i}  {lattice_vector[0]:.6}  {lattice_vector[1]:.6}  {lattice_vector[2]:.6}\n')
+
+            if not self.structure.coords_are_cartesian:
+                self.structure.mod_coords_to_cartesian()
+
+            for atom_name, charge, coord in zip(self.structure.species, self.charges,
+                                                Angstrom2Bohr * self.structure.coords):
+                file.write(f'{ElemName2Num[atom_name]}  {charge:.6}  {coord[0]:.6}  {coord[1]:.6}  {coord[2]:.6}\n')
+
+            counter = 0
+            for i in range(self.Ns[0]):
+                for j in range(self.Ns[1]):
+                    for k in range(self.Ns[2]):
+                        file.write(str('%.5E' % self.volumetric_data[i][j][k]) + '  ')
+                        counter += 1
+                        if counter % 6 == 0:
+                            file.write('\n  ')
+                    file.write('\n  ')
 
     def get_average_along_axis(self, axis):
         """

@@ -11,7 +11,10 @@ ElemNum2Name = {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O
                 101: 'Md', 102: 'No', 103: 'Lr', 104: 'Rf', 105: 'Db', 106: 'Sg', 107: 'Bh', 108: 'Hs', 109: 'Mt',
                 110: 'Ds', 111: 'Rg', 112: 'Cn', 113: 'Nh', 114: 'Fl', 115: 'Mc', 116: 'Lv', 117: 'Ts', 118: 'Og'}
 
+ElemName2Num = {v: k for k, v in zip(ElemNum2Name.keys(), ElemNum2Name.values())}
+
 Bohr2Angstrom = 0.529177 #? TODO Check it, it is Angstrom to Bohr value
+Angstrom2Bohr = 1 / Bohr2Angstrom
 
 PLANCK_CONSTANT = 4.135667662e-15  # Planck's constant in eV*s
 BOLTZMANN_CONSTANT = 8.617333262145e-5  # Boltzmann's constant in eV/K
