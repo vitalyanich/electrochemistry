@@ -2,7 +2,6 @@ import numpy as np
 from typing import Union, List, Iterable
 from monty.re import regrep
 from electrochemistry.core.structure import Structure
-from pymatgen.io.vasp.outputs import Chgcar as Chgcar_pymatgen
 
 
 class Poscar:
