@@ -75,6 +75,16 @@ class Cube:
 
             return Cube(structure, comment, np.array([NX, NY, NZ]), charges, data)
 
+    def reduce(self, factor):
+        from skimage.measure import block_reduce
+        try:
+            volumetric_data_reduced = block_reduce(self.volumetric_data, block_size=(factor, factor, factor), func=np.mean)
+            Ns_reduced = np.shape(volumetric_data_reduced)
+        except:
+            raise ValueError('Try another factor value')
+        return Cube(self.structure, self.comment, Ns_reduced, self.charges, volumetric_data_reduced)
+
+
     def to_file(self, filepath):
         with open(filepath, 'w') as file:
             file.write(self.comment)

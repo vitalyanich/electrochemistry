@@ -437,7 +437,7 @@ class Chgcar:
             raise ValueError(f'The file contains more than 2 volumetric data, len = {len(volumetric_data)}')
 
     def convert_to_cube(self, volumetric_data='charge_density'):
-        comment = '  Cube file was created using Electrochenistry package\n'
+        comment = '  Cube file was created using Electrochemistry package\n'
         if volumetric_data == 'charge_density':
             return Cube(self.structure, comment + '  Charge Density\n', np.array(list(self.charge_density.shape)),
                         np.zeros(self.structure.natoms), self.charge_density)
