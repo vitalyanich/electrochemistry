@@ -88,7 +88,7 @@ class Structure:
 
     def mod_add_atoms(self, coords, species) -> None:
         """
-        Add atoms in the Structure
+        Adds atoms in the Structure
         Args:
             coords: List or np.ndarray (Nx3 dimension) that contains coords of each species
             species: List of species on each site. Usually list of elements, e.g., ['Al', 'Al', 'O', 'H']
@@ -103,7 +103,7 @@ class Structure:
 
     def mod_delete_atoms(self, ids) -> None:
         """
-        Delete selected atoms by ids
+        Deletes selected atoms by ids
         Args:
             ids: sequence of atoms ids
         """
@@ -112,11 +112,11 @@ class Structure:
 
     def mod_change_atoms(self, ids, coords, species) -> None:
         """
-        Change selected atom by id .
+        Change selected atom by id
         Args:
-            ids: List or int. first id is zero.
-            coords: None os np.array with new coords, e.g. np.array([1, 2, 4.6])
-            species: None of str or List[str]. New types of changed atoms
+            ids: List or int. First id is zero.
+            coords: None or np.array with new coords, e.g. np.array([1, 2, 4.6])
+            species: None or str or List[str]. New types of changed atoms
 
         Returns:
 
@@ -130,14 +130,20 @@ class Structure:
             else:
                 self._species[ids] = species
 
-    def mod_coords_to_cartesian(self):
+    def mod_coords_to_cartesian(self) -> None:
+        """
+        Converts species coordinates to Cartesian coordination system.
+        """
         if self.coords_are_cartesian is True:
             return 'Coords are already cartesian'
         else:
             self._coords = np.matmul(self.coords, self.lattice)
             self.coords_are_cartesian = True
 
-    def mod_coords_to_direct(self):
+    def mod_coords_to_direct(self) -> None:
+        """
+        Converts species coordinates to Direct coordination system.
+        """
         if self.coords_are_cartesian is False:
             return 'Coords are already direct'
         else:
@@ -145,18 +151,46 @@ class Structure:
             self._coords = np.matmul(self.coords, transform)
             self.coords_are_cartesian = False
 
-    def get_vector(self, id_1, id_2) -> np.ndarray:
-        vector = self._coords[id_1] - self._coords[id_2]
-        return vector / np.linalg.norm(vector)
+    def mod_add_vector(self, vector, cartesian=True) -> None:
+        """
+        Adds a vector to all atoms.
+        Args:
+            vector (np.ndarray): a vector which will be added to coordinates of all species
+            cartesian (bool): determine in which coordination system the vector defined. Cartesian=True means that
+            the vector is defined in Cartesian coordination system. Cartesian=False means that the vector is defined
+            in Direct coordination system.
+        """
+        self.mod_coords_to_direct()
+        if cartesian:
+            transform = np.linalg.inv(self.lattice)
+            vector = np.matmul(vector, transform)
+        self._coords += vector
+        self._coords %= np.array([1, 1, 1])
+
+    def get_vector(self, id_1, id_2, unit=True) -> np.ndarray:
+        """
+        Returns a vector (unit vector by default) which starts in the atom with id_1 and points to the atom with id_2
+        Args:
+            id_1: id of the first atom (vector origin)
+            id_2: id of the second atom
+            unit: Defines whether the vector will be normed or not. Unit=True means that the vector norm will be equal 1
+        Returns (np.ndarray): vector from atom with id_1 to atom with id_2
+        """
+        vector = self._coords[id_2] - self._coords[id_1]
+        if unit:
+            return vector / np.linalg.norm(vector)
+        else:
+            return vector
 
     def get_distance_matrix(self) -> np.ndarray:
         """
         Returns distance matrix R, where R[i,j] is the vector from atom i to atom j.
-        Now works only for parallelepiped cells.
 
         Returns:
-            distance matrix containing vectors
+            np.ndarray (NxNx3 dimensions) which is a distance matrix in Cartesian coordination system
         """
+        '''
+        Old version (only for parallelepiped cells)
         if self.coords_are_cartesian is False:
             assert StructureError('Now only cartesian coords are supported')
         r1 = np.broadcast_to(self.coords.reshape((self.natoms, 1, 3)), (self.natoms, self.natoms, 3))
@@ -166,14 +200,22 @@ class Structure:
         R = (R + L / 2) % L - L / 2.
         assert np.all(R >= -L / 2.) and np.all(R <= L / 2.)
         return R
+        '''
+
+        self.mod_coords_to_direct()
+        r1 = np.broadcast_to(self.coords.reshape((self.natoms, 1, 3)), (self.natoms, self.natoms, 3))
+        r2 = np.broadcast_to(self.coords.reshape((1, self.natoms, 3)), (self.natoms, self.natoms, 3))
+        R = r2 - r1
+        R = (R + 0.5) % 1 - 0.5
+        assert np.all(R >= - 0.5) and np.all(R <= 0.5)
+        return np.matmul(R, self.lattice)
 
     def get_distance_matrix_scalar(self) -> np.ndarray:
         """
         Returns distance matrix R, where R[i, j] is the Euclidean norm of a vector from atom i to atom j.
-        Now works only for parallelepiped cells.
 
         Returns:
-            distance matrix containing scalars
+            np.ndarray (NxN dimensions) which is a distance matrix containing scalars
         """
         R = self.get_distance_matrix()
         return np.sqrt(np.sum(R * R, axis=2))

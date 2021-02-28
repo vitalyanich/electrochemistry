@@ -159,3 +159,26 @@ class Cube:
             return np.max(avr)
         else:
             return scale * np.max(avr)
+
+
+class Xyz:
+    def __init__(self, structure, comment):
+        self.stucture = structure
+        self.comment = comment
+
+    @staticmethod
+    def from_file(filepath):
+        with open(filepath, 'rt') as file:
+            natoms = int(file.readline().strip())
+            comment = file.readline()
+
+            coords = np.zeros((natoms, 3))
+            species = []
+            for i in range(natoms):
+                line = file.readline().split()
+                species.append(line[0])
+                coords[i] = [float(j) for j in line[1:]]
+
+            struct = Structure(np.zeros((3, 3)), species, coords, coords_are_cartesian=True)
+
+        return Xyz(struct, comment)
