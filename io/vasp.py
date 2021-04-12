@@ -174,7 +174,7 @@ class Outcar:
     """Class that reads VASP OUTCAR files"""
 
     def __init__(self, nkpts, nbands, natoms, weights, nisteps, spin_restricted, efermi_hist=None, eigenvalues_hist=None,
-                 occupations_hist=None, energy_hist=None, forces_hist=None):
+                 occupations_hist=None, energy_hist=None, energy_ionic_hist=None, forces_hist=None):
         self.nkpts = nkpts
         self.nbands = nbands
         self.natoms = natoms
@@ -195,12 +195,13 @@ class Outcar:
         self.forces_hist = forces_hist
         self.efermi_hist = efermi_hist
         if not spin_restricted:
-            self.eigenvalues_hist = eigenvalues_hist[:,0,:,:]
-            self.occupations_hist = occupations_hist[:,0,:,:]
+            self.eigenvalues_hist = eigenvalues_hist[:, 0, :, :]
+            self.occupations_hist = occupations_hist[:, 0, :, :]
         else:
             self.eigenvalues_hist = eigenvalues_hist
             self.occupations_hist = occupations_hist
         self.energy_hist = energy_hist
+        self.energy_ionic_hist = energy_ionic_hist
 
     @staticmethod
     def _GaussianSmearing(x, x0, sigma):
@@ -220,6 +221,7 @@ class Outcar:
                     'weights': 'Following reciprocal coordinates:',
                     'efermi': 'E-fermi\s:\s+([-.\d]+)',
                     'energy': 'free energy\s+TOTEN\s+=\s+(.\d+\.\d+)\s+eV',
+                    'energy_ionic': 'free  energy\s+TOTEN\s+=\s+(.\d+\.\d+)\s+eV',
                     'kpoints': r'k-point\s+(\d+)\s:\s+[-.\d]+\s+[-.\d]+\s+[-.\d]+\n',
                     'forces': '\s+POSITION\s+TOTAL-FORCE',
                     'spin': 'spin component \d+\n'}
@@ -229,6 +231,7 @@ class Outcar:
         nkpts = int(matches['nkpts'][0][0][0])
         natoms = int(matches['natoms'][0][0][0])
         energy_hist = ([float(i[0][0]) for i in matches['energy']])
+        energy_ionic_hist = ([float(i[0][0]) for i in matches['energy_ionic']])
 
         if matches['spin'] != []:
             spin_restricted = True
@@ -238,11 +241,11 @@ class Outcar:
             nspin = 1
 
         if nkpts == 1:
-            weights = data[matches['weights'][0][1] + 2].split()[3]
+            weights = [float(data[matches['weights'][0][1] + 2].split()[3])]
         else:
             weights = np.zeros(nkpts)
             for i in range(nkpts):
-                weights[i] = data[matches['weights'][0][1] + 2 + i].split()[3]
+                weights[i] = float(data[matches['weights'][0][1] + 2 + i].split()[3])
             weights /= np.sum(weights)
 
         arr = matches['efermi']
@@ -272,7 +275,7 @@ class Outcar:
                 forces_hist[step, atom] = [float(line[3]), float(line[4]), float(line[5])]
 
         return Outcar(nkpts, nbands, natoms, weights, nisteps, spin_restricted, efermi_hist, eigenvalues_hist, occupations_hist,
-                      energy_hist, forces_hist)
+                      energy_hist, energy_ionic_hist, forces_hist)
 
 
     def get_band_eigs(self, bands):
