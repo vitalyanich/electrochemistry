@@ -173,35 +173,42 @@ class Poscar:
 class Outcar:
     """Class that reads VASP OUTCAR files"""
 
-    def __init__(self, nkpts, nbands, natoms, weights, nisteps, spin_restricted, efermi_hist=None, eigenvalues_hist=None,
+    def __init__(self, nkpts, nbands, natoms, weights, nisteps, spin_polarized, efermi_hist=None, eigenvalues_hist=None,
                  occupations_hist=None, energy_hist=None, energy_ionic_hist=None, forces_hist=None):
         self.nkpts = nkpts
         self.nbands = nbands
         self.natoms = natoms
         self.weights = weights
         self.nisteps = nisteps
-        self.spin_restricted = spin_restricted
-
-        self.efermi = efermi_hist[-1]
-        self.forces = forces_hist[-1]
-
-        if not spin_restricted:
-            self.eigenvalues = eigenvalues_hist[-1][0]
-            self.occupations = occupations_hist[-1][0]
-        else:
-            self.eigenvalues = eigenvalues_hist[-1]
-            self.occupations = occupations_hist[-1]
+        self.spin_polarized = spin_polarized
 
         self.forces_hist = forces_hist
         self.efermi_hist = efermi_hist
-        if not spin_restricted:
-            self.eigenvalues_hist = eigenvalues_hist[:, 0, :, :]
-            self.occupations_hist = occupations_hist[:, 0, :, :]
-        else:
-            self.eigenvalues_hist = eigenvalues_hist
-            self.occupations_hist = occupations_hist
         self.energy_hist = energy_hist
         self.energy_ionic_hist = energy_ionic_hist
+
+        if spin_polarized:
+            self.eigenvalues = eigenvalues_hist[-1]
+            self.occupations = occupations_hist[-1]
+            self.eigenvalues_hist = eigenvalues_hist
+            self.occupations_hist = occupations_hist
+        else:
+            self.eigenvalues = eigenvalues_hist[-1][0]
+            self.occupations = occupations_hist[-1][0]
+            self.eigenvalues_hist = eigenvalues_hist[:, 0, :, :]
+            self.occupations_hist = occupations_hist[:, 0, :, :]
+
+    @property
+    def forces(self):
+        return self.forces_hist[-1]
+
+    @property
+    def efermi(self):
+        return self.efermi_hist[-1]
+
+    @property
+    def energy(self):
+        return self.energy_ionic_hist[-1]
 
     @staticmethod
     def _GaussianSmearing(x, x0, sigma):
@@ -277,7 +284,6 @@ class Outcar:
         return Outcar(nkpts, nbands, natoms, weights, nisteps, spin_restricted, efermi_hist, eigenvalues_hist, occupations_hist,
                       energy_hist, energy_ionic_hist, forces_hist)
 
-
     def get_band_eigs(self, bands):
         if type(bands) is int:
             return np.array([eig for eig in self.eigenvalues[:, bands]])
@@ -304,7 +310,8 @@ class Outcar:
             zero_at_fermi (bool, optional): if True Fermi energy will be equal to zero
             emin (float, optional): minimum value in DOS calculation.
             emax (float, optional): maximum value in DOS calculation.
-            smearing (str, optional): define whether will be used smearing or not. Possible options: 'Gaussian'
+            smearing (str, optional): define whether will be used smearing or not. Default value is 'Gaussian'.
+            Possible options: 'Gaussian'
             sigma (float, optional): define the sigma parameter in Gaussian smearing. Default value is 0.02
 
         Returns:
@@ -323,7 +330,7 @@ class Outcar:
         if 'smearing' in kwargs:
             smearing = kwargs['smearing']
         else:
-            smearing = False
+            smearing = 'Gaussian'
 
         if smearing == 'Gaussian':
             if 'sigma' in kwargs:
@@ -340,7 +347,7 @@ class Outcar:
                 E_max = np.max(self.eigenvalues)
             E_arr = np.arange(E_min, E_max, dE)
 
-            if not self.spin_restricted:
+            if not self.spin_polarized:
                 DOS_arr = np.zeros_like(E_arr)
                 for energy_kpt, weight in zip(self.eigenvalues, self.weights):
                     for energy in energy_kpt:
@@ -468,13 +475,26 @@ class Xdatcar:
                  comment: str = None,
                  trajectory=None):
         """
-        \TODO
+        Create an Xdatcar instance
+        Args:
+            structure (Structure class): a base class that contains lattice, coords and species information
+            comment (str): a VASP comment
+            trajectory (3D np.array): contains coordinates of all atoms along with trajectory. It has the shape
+             n_steps x n_atoms x 3
         """
         self.structure = structure
         self.comment = comment
         self.trajectory = trajectory
 
     def __add__(self, other):
+        """
+        Concatenates Xdatcar files (theirs trajectory)
+        Args:
+            other (Xdatcar class): Xdatcar that should be added to the current Xdatcar
+
+        Returns (Xdatcar class):
+            New Xdatcar with concatenated trajectory
+        """
         assert isinstance(other, Xdatcar), 'Other object must belong to Xdatcar class'
         assert np.array_equal(self.structure.lattice, other.structure.lattice), 'Lattices of two files mist be equal'
         assert self.structure.species == other.structure.species, 'Species in two files must be identical'
@@ -483,6 +503,30 @@ class Xdatcar:
         trajectory = np.vstack((self.trajectory, other.trajectory))
 
         return Xdatcar(self.structure, self.comment + ' + ' + other.comment, trajectory)
+
+    def add(self, other):
+        """
+        Concatenates Xdatcar files (theirs trajectory)
+        Args:
+            other (Xdatcar class): Xdatcar that should be added to the current Xdatcar
+
+        Returns (Xdatcar class):
+            New Xdatcar with concatenated trajectory
+        """
+        return self.__add__(other)
+
+    def add_(self, other):
+        """
+        Concatenates Xdatcar files (theirs trajectory). It's inplace operation, current Xdatcar will be modified
+        Args:
+            other (Xdatcar class): Xdatcar that should be added to the current Xdatcar
+        """
+        assert isinstance(other, Xdatcar), 'Other object must belong to Xdatcar class'
+        assert np.array_equal(self.structure.lattice, other.structure.lattice), 'Lattices of two files mist be equal'
+        assert self.structure.species == other.structure.species, 'Species in two files must be identical'
+        assert self.structure.coords_are_cartesian == other.structure.coords_are_cartesian, \
+            'Coords must be in the same coordinate system'
+        self.trajectory = np.vstack((self.trajectory, other.trajectory))
 
     @property
     def nsteps(self):
