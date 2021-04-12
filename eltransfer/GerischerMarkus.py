@@ -4,7 +4,7 @@ from scipy.optimize import minimize
 import numbers
 import typing
 from tqdm import tqdm
-from electrochemistry.core.useful_funcs import nearest_array_indices, ClassMethods
+from electrochemistry.core.useful_funcs import nearest_array_index, ClassMethods
 E_F_SHE_VAC = -4.5  # Fermi Energy of Standard Hydrogen Electrode with respect to vacuum
 
 
@@ -190,7 +190,7 @@ class GM(ClassMethods):
         C_Q_arr = np.zeros_like(E_diff_arr)
 
         for i, (E_diff, sigma) in enumerate(zip(E_diff_arr, sigma_arr)):
-            i_1, i_2 = nearest_array_indices(self.sigma_Q_arr, sigma)
+            i_1, i_2 = nearest_array_index(self.sigma_Q_arr, sigma)
             E_step = self.__SIGMA_ACCURACY
             E_start = - self.__SIGMA_RANGE
             dE_Q = (E_start + E_step * i_1 + E_start + E_step * i_2) / 2
@@ -265,7 +265,7 @@ class GM(ClassMethods):
     def compute_sigma(self, E_diff, sigma_0=None):
 
         def error_E_diff(sigma, E_diff, sigma_Q_arr):
-            i_1, i_2 = nearest_array_indices(sigma_Q_arr, sigma)
+            i_1, i_2 = nearest_array_index(sigma_Q_arr, sigma)
             dE_Q = E_start + E_step * i_1
             dE_EDL = - sigma / self.C_EDL
             dE_total = dE_Q + dE_EDL
@@ -328,10 +328,10 @@ class GM(ClassMethods):
         E_F_redox = E_F_SHE_VAC - self.efermi - V_std + self.vacuum_lvl - overpot
         sigma = self.compute_sigma(E_F_redox)
 
-        i_1, i_2 = nearest_array_indices(self.sigma_Q_arr, sigma)
+        ind = nearest_array_index(self.sigma_Q_arr, sigma)
         E_step = self.__SIGMA_ACCURACY
         E_start = - self.__SIGMA_RANGE
-        dE_Q = E_start + E_step * i_1
+        dE_Q = E_start + E_step * ind
 
         E_fermi = self.E - dE_Q
         E_DOS_redox = self.E - dE_Q - overpot
