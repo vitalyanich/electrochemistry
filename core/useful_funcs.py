@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class ClassMethods:
     def check_existence(self, variable):
         """
@@ -9,8 +12,5 @@ class ClassMethods:
             raise ValueError(f'{variable} is not defined')
 
 
-def nearest_array_indices(array, value):
-    i = 0
-    while value < array[i]:
-        i += 1
-    return i - 1, i
+def nearest_array_index(array, value):
+    return (np.abs(array - value)).argmin()

@@ -195,8 +195,8 @@ class Outcar:
         self.forces_hist = forces_hist
         self.efermi_hist = efermi_hist
         if not spin_restricted:
-            self.eigenvalues_hist = eigenvalues_hist[:,0,:,:]
-            self.occupations_hist = occupations_hist[:,0,:,:]
+            self.eigenvalues_hist = eigenvalues_hist[:, 0, :, :]
+            self.occupations_hist = occupations_hist[:, 0, :, :]
         else:
             self.eigenvalues_hist = eigenvalues_hist
             self.occupations_hist = occupations_hist
@@ -241,11 +241,11 @@ class Outcar:
             nspin = 1
 
         if nkpts == 1:
-            weights = data[matches['weights'][0][1] + 2].split()[3]
+            weights = [float(data[matches['weights'][0][1] + 2].split()[3])]
         else:
             weights = np.zeros(nkpts)
             for i in range(nkpts):
-                weights[i] = data[matches['weights'][0][1] + 2 + i].split()[3]
+                weights[i] = float(data[matches['weights'][0][1] + 2 + i].split()[3])
             weights /= np.sum(weights)
 
         arr = matches['efermi']
