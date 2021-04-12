@@ -19,12 +19,12 @@ class Poscar:
             sdynamics_data (list, 2D np.array): data about selective dynamics for each atom. [['T', 'T', 'F'],
             ['F', 'F', 'F'],...]
         """
-        self._structure = structure
+        self.structure = structure
         self.comment = comment
-        self._sdynamics_data = sdynamics_data
+        self.sdynamics_data = sdynamics_data
 
     def __repr__(self):
-        return f'{self.comment}\n' + repr(self._structure)
+        return f'{self.comment}\n' + repr(self.structure)
 
     @staticmethod
     def from_file(filepath):
@@ -93,10 +93,10 @@ class Poscar:
         file = open(filepath, 'w')
         file.write(f'{self.comment}\n')
         file.write('1\n')
-        for vector in self._structure.lattice:
+        for vector in self.structure.lattice:
             file.write(f'  {vector[0]}  {vector[1]}  {vector[2]}\n')
 
-        species = np.array(self._structure.species)
+        species = np.array(self.structure.species)
         sorted_order = np.argsort(species)
         unique, counts = np.unique(species, return_counts=True)
         line = '   '
@@ -108,63 +108,63 @@ class Poscar:
             line += str(c) + '  '
         file.write(line + '\n')
 
-        if self._sdynamics_data is not None:
+        if self.sdynamics_data is not None:
             file.write('Selective dynamics\n')
 
-        if self._structure.coords_are_cartesian:
+        if self.structure.coords_are_cartesian:
             file.write('Cartesian\n')
         else:
             file.write('Direct\n')
 
-        if self._sdynamics_data is None:
+        if self.sdynamics_data is None:
             for i in sorted_order:
-                atom = self._structure.coords[i]
+                atom = self.structure.coords[i]
                 file.write(f'  {atom[0]}  {atom[1]}  {atom[2]}\n')
         else:
             for i in sorted_order:
-                atom = self._structure.coords[i]
-                sd_atom = self._sdynamics_data[i]
+                atom = self.structure.coords[i]
+                sd_atom = self.sdynamics_data[i]
                 file.write(f'  {atom[0]}  {atom[1]}  {atom[2]}  {sd_atom[0]}  {sd_atom[1]}  {sd_atom[2]}\n')
 
         file.close()
 
     def add_atoms(self, coords, species, sdynamics_data=None):
-        self._structure.mod_add_atoms(coords, species)
+        self.structure.mod_add_atoms(coords, species)
         if sdynamics_data is not None:
             if any(isinstance(el, list) for el in sdynamics_data):
                 for sd_atom in sdynamics_data:
-                    self._sdynamics_data.append(sd_atom)
+                    self.sdynamics_data.append(sd_atom)
             else:
-                self._sdynamics_data.append(sdynamics_data)
+                self.sdynamics_data.append(sdynamics_data)
 
     def change_atoms(self, ids: Union[int, Iterable],
                      new_coords: Union[Iterable[float], Iterable[Iterable[float]]] = None,
                      new_species: Union[str, List[str]] = None,
                      new_sdynamics_data: Union[Iterable[str], Iterable[Iterable[str]]] = None):
-        self._structure.mod_change_atoms(ids, new_coords, new_species)
+        self.structure.mod_change_atoms(ids, new_coords, new_species)
         if new_sdynamics_data is not None:
-            if self._sdynamics_data is None:
-                self._sdynamics_data = [['T', 'T', 'T'] for _ in range(self._structure.natoms)]
+            if self.sdynamics_data is None:
+                self.sdynamics_data = [['T', 'T', 'T'] for _ in range(self.structure.natoms)]
             if isinstance(ids, Iterable):
                 for i, new_sdata in zip(ids, new_sdynamics_data):
-                    self._sdynamics_data[i] = new_sdata
+                    self.sdynamics_data[i] = new_sdata
             else:
-                self._sdynamics_data[ids] = new_sdynamics_data
+                self.sdynamics_data[ids] = new_sdynamics_data
 
     def coords_to_cartesian(self):
-        if self._structure.coords_are_cartesian is True:
+        if self.structure.coords_are_cartesian is True:
             return 'Coords are already cartesian'
         else:
-            self._structure._coords = np.matmul(self._structure.coords, self._structure.lattice)
-            self._structure.coords_are_cartesian = True
+            self.structure.coords = np.matmul(self.structure.coords, self.structure.lattice)
+            self.structure.coords_are_cartesian = True
 
     def coords_to_direct(self):
-        if self._structure.coords_are_cartesian is False:
+        if self.structure.coords_are_cartesian is False:
             return 'Coords are alresdy direct'
         else:
-            transform = np.linalg.inv(self._structure.lattice)
-            self._structure._coords = np.matmul(self._structure.coords, transform)
-            self._structure.coords_are_cartesian = False
+            transform = np.linalg.inv(self.structure.lattice)
+            self.structure.coords = np.matmul(self.structure.coords, transform)
+            self.structure.coords_are_cartesian = False
 
     def convert(self, frmt):
         pass
@@ -382,6 +382,7 @@ class Procar:
     # TODO create Procar class
     pass
 
+
 class Chgcar:
     """
     Class for reading CHG and CHGCAR files from vasp
@@ -395,7 +396,7 @@ class Chgcar:
     @staticmethod
     def from_file(filepath):
         poscar = Poscar.from_file(filepath)
-        structure = poscar._structure
+        structure = poscar.structure
 
         volumetric_data = []
         read_data = False
@@ -454,3 +455,106 @@ class Chgcar:
     def to_file(self, filepath):
         #TODO write to_file func
         pass
+
+
+class Xdatcar:
+    """Class that reads VASP XDATCAR files"""
+
+    def __init__(self,
+                 structure,
+                 comment: str = None,
+                 trajectory=None):
+        """
+        \TODO
+        """
+        self.structure = structure
+        self.comment = comment
+        self.trajectory = trajectory
+
+    def __add__(self, other):
+        assert isinstance(other, Xdatcar), 'Other object must belong to Xdatcar class'
+        assert np.array_equal(self.structure.lattice, other.structure.lattice), 'Lattices of two files mist be equal'
+        assert self.structure.species == other.structure.species, 'Species in two files must be identical'
+        assert self.structure.coords_are_cartesian == other.structure.coords_are_cartesian, \
+            'Coords must be in the same coordinate system'
+        trajectory = np.vstack((self.trajectory, other.trajectory))
+
+        return Xdatcar(self.structure, self.comment + ' + ' + other.comment, trajectory)
+
+    @property
+    def nsteps(self):
+        return len(self.trajectory)
+
+    @staticmethod
+    def from_file(filepath):
+        """
+        Static method to read a XDATCAR file
+        Args:
+            filepath: path to the XDATCAR file
+
+        Returns:
+            Xdatcar class object
+        """
+        file = open(filepath, 'r')
+        data = file.readlines()
+        file.close()
+
+        comment = data[0].strip()
+        scale = float(data[1])
+        lattice = np.array([[float(i) for i in line.split()] for line in data[2:5]])
+        if scale < 0:
+            # In VASP, a negative scale factor is treated as a volume.
+            # We need to translate this to a proper lattice vector scaling.
+            vol = abs(np.linalg.det(lattice))
+            lattice *= (-scale / vol) ** (1 / 3)
+        else:
+            lattice *= scale
+
+        name_species = data[5].split()
+        num_species = [int(i) for i in data[6].split()]
+        species = []
+        for name, num in zip(name_species, num_species):
+            species += [name] * num
+
+        n_atoms = np.sum(num_species)
+        n_steps = int((len(data) - 7) / (n_atoms + 1))
+        trajectory = np.zeros((n_steps, n_atoms, 3))
+
+        for i in range(n_steps):
+            atom_start = 8 + i * (n_atoms + 1)
+            atom_stop = 7 + (i + 1) * (n_atoms + 1)
+            data_step = [line.split() for line in data[atom_start:atom_stop]]
+            for j in range(n_atoms):
+                trajectory[i, j] = [float(k) for k in data_step[j]]
+
+        struct = Structure(lattice, species, trajectory[0], coords_are_cartesian=False)
+
+        return Xdatcar(struct, comment, trajectory)
+
+    def to_file(self, filepath):
+        file = open(filepath, 'w')
+        file.write(f'{self.comment}\n')
+        file.write('1\n')
+        for vector in self.structure.lattice:
+            file.write(f'  {vector[0]}  {vector[1]}  {vector[2]}\n')
+
+        species = np.array(self.structure.species)
+        unique, counts = np.unique(species, return_counts=True)
+        line = '   '
+        for u in unique:
+            line += u + '  '
+        file.write(line + '\n')
+        line = '   '
+        for c in counts:
+            line += str(c) + '  '
+        file.write(line + '\n')
+
+        for i in range(self.nsteps):
+            file.write(f'Direct configuration=     {i + 1}\n')
+            for j in range(self.structure.natoms):
+                file.write(f'  {self.trajectory[i, j, 0]}  {self.trajectory[i, j, 1]}  {self.trajectory[i, j, 2]}\n')
+
+        file.close()
+
+    def mod_coords_to_box(self):
+        self.trajectory %= 1

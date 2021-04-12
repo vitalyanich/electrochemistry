@@ -163,7 +163,7 @@ class Cube:
 
 class Xyz:
     def __init__(self, structure, comment):
-        self.stucture = structure
+        self.structure = structure
         self.comment = comment
 
     @staticmethod

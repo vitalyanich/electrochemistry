@@ -101,7 +101,7 @@ class kHET():
             k_HET_ = np.zeros((xlen, ylen))
             if z_pos == None:
                 raise ValueError('For dim=2D z_pos is obligatory parameter')
-            b1, b2, b3 = self.poscar._structure.lattice
+            b1, b2, b3 = self.poscar.structure.lattice
             bn1 = b1 / xlen
             bn2 = b2 / ylen
             bn3 = b3 / zlen
@@ -203,7 +203,7 @@ class kHET():
         Function for plotting 2D images
         """
         xlen, ylen = np.shape(func)
-        b1, b2, b3 = self.poscar._structure.lattice
+        b1, b2, b3 = self.poscar.structure.lattice
         bn1 = b1 / xlen
         bn2 = b2 / ylen
 
@@ -244,7 +244,7 @@ class kHET():
         """
         Inner function to calculate sheet_area (XY plane) in cm^2
         """
-        b1, b2, b3 = self.poscar._structure.lattice
+        b1, b2, b3 = self.poscar.structure.lattice
         return np.linalg.norm(np.cross(b1, b2))*1e-16
 
     def generate_acceptor_orbitals(self, orb_type, shape, z_shift=0, x_shift=0, y_shift=0):
@@ -253,7 +253,7 @@ class kHET():
         :return:
         """
         bohr_radius = 0.529177  #TODO Check
-        b1, b2, b3 = self.poscar._structure.lattice
+        b1, b2, b3 = self.poscar.structure.lattice
         bn1 = b1 / shape[0]
         bn2 = b2 / shape[1]
         bn3 = b3 / shape[2]
