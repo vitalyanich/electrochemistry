@@ -4,12 +4,21 @@ from electrochemistry.core.structure import Structure
 
 
 class Cube:
-    def __init__(self, structure, comment, Ns_arr, charges, data):
-        self.structure = structure
-        self.comment = comment
-        self.Ns = Ns_arr
-        self.charges = charges
+    def __init__(self, data, structure, comment=None, Ns_arr=None, charges=None):
         self.volumetric_data = data
+        self.structure = structure
+        if comment is None:
+            self.comment = 'Comment if blanc\nGood luck!'
+        self.comment = comment
+        if Ns_arr is None:
+            self.Ns = data.shape
+        else:
+            self.Ns = Ns_arr
+        if charges is None:
+            self.charges = np.zeros(structure.natoms)
+        else:
+            self.charges = charges
+
 
     def __repr__(self):
         return f'{self.comment}\n' + f'NX: {self.Ns[0]}\nNY: {self.Ns[1]}\nNZ: {self.Ns[2]}' + repr(self.structure)
@@ -29,13 +38,13 @@ class Cube:
                 raise ValueError('Cube file with not zero origin can\'t be processed')
             line = file.readline().split()
             NX = int(line[0])
-            xaxis = NX * np.array([float(line[1]), float(line[2]), float(line[3])])
+            xaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
             line = file.readline().split()
             NY = int(line[0])
-            yaxis = NY * np.array([float(line[1]), float(line[2]), float(line[3])])
+            yaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
             line = file.readline().split()
             NZ = int(line[0])
-            zaxis = NZ * np.array([float(line[1]), float(line[2]), float(line[3])])
+            zaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
             lattice = np.array([xaxis, yaxis, zaxis])
 
             if NX > 0 and NY > 0 and NZ > 0:
@@ -58,14 +67,15 @@ class Cube:
             if units == 'Bohr':
                 lattice = Bohr2Angstrom * lattice
                 coords = Bohr2Angstrom * coords
+                NX, NY, NZ = -NX, -NY, -NZ
 
             structure = Structure(lattice, species, coords, coords_are_cartesian=True)
 
-            data = np.zeros((NX, NY, NZ))
-            indexes = np.arange(0, NX * NY * NZ)
-            indexes_1 = indexes // (NY * NZ)
-            indexes_2 = (indexes // NZ) % NY
-            indexes_3 = indexes % NZ
+            data = np.zeros((abs(NX), abs(NY), abs(NZ)))
+            indexes = np.arange(0, abs(NX * NY * NZ))
+            indexes_1 = indexes // abs(NY * NZ)
+            indexes_2 = (indexes // abs(NZ)) % abs(NY)
+            indexes_3 = indexes % abs(NZ)
 
             i = 0
             for line in file:
@@ -73,7 +83,7 @@ class Cube:
                     data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
                     i += 1
 
-            return Cube(structure, comment, np.array([NX, NY, NZ]), charges, data)
+            return Cube(data, structure, comment, np.array([NX, NY, NZ]), charges)
 
     def reduce(self, factor):
         from skimage.measure import block_reduce
@@ -82,7 +92,7 @@ class Cube:
             Ns_reduced = np.shape(volumetric_data_reduced)
         except:
             raise ValueError('Try another factor value')
-        return Cube(self.structure, self.comment, Ns_reduced, self.charges, volumetric_data_reduced)
+        return Cube(volumetric_data_reduced, self.structure, self.comment, Ns_reduced, self.charges)
 
 
     def to_file(self, filepath):
@@ -100,22 +110,20 @@ class Cube:
 
             file.write(f'  {self.structure.natoms:{width_Ni}}    {0:{width}.6f}    {0:{width}.6f}    {0:{width}.6f}\n')
 
-            for N_i, lattice_vector in zip(self.Ns, self.structure.lattice * Angstrom2Bohr):
-                lattice_vector = lattice_vector / N_i
+            for N_i, lattice_vector in zip(self.Ns, self.structure.lattice):
                 file.write(f'  {N_i:{width_Ni}}    {lattice_vector[0]:{width}.6f}    {lattice_vector[1]:{width}.6f}    {lattice_vector[2]:{width}.6f}\n')
 
             if not self.structure.coords_are_cartesian:
                 self.structure.mod_coords_to_cartesian()
 
-            for atom_name, charge, coord in zip(self.structure.species, self.charges,
-                                                Angstrom2Bohr * self.structure.coords):
+            for atom_name, charge, coord in zip(self.structure.species, self.charges, self.structure.coords):
                 file.write(f'  {ElemName2Num[atom_name]:{width_Ni}}    {charge:{width}.6f}    {coord[0]:{width}.6f}    {coord[1]:{width}.6f}    {coord[2]:{width}.6f}\n')
 
             counter = 0
             file.write('  ')
-            for i in range(self.Ns[0]):
-                for j in range(self.Ns[1]):
-                    for k in range(self.Ns[2]):
+            for i in range(abs(self.Ns[0])):
+                for j in range(abs(self.Ns[1])):
+                    for k in range(abs(self.Ns[2])):
                         file.write(str('%.5E' % self.volumetric_data[i][j][k]) + '  ')
                         counter += 1
                         if counter % 6 == 0:
