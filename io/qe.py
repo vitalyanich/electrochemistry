@@ -18,6 +18,11 @@ class Output:
         self.efermi = None
         self.nkpt = None
 
+    @staticmethod
+    def _GaussianSmearing(x, x0, sigma):
+        """Simulate the Delta function by a Gaussian shape function"""
+        return 1 / (np.sqrt(2 * np.pi) * sigma) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
+
     def from_file(self, filepath):
         matches = regrep(filepath, self.patterns)
 
@@ -64,7 +69,7 @@ class Output:
         else:
             raise ValueError('Variable bands should be int or iterable')
 
-    def get_DOS(self, dE, zero_at_fermi=False, sm_param=None):
+    def get_DOS(self, **kwargs):
         """Calculate Density of States based on eigenvalues and its weights
 
         Args:
@@ -84,42 +89,43 @@ class Output:
         Returns:
             E, DOS - Two 1D np.arrays that contain energy and according DOS values
         """
-        if sm_param is None:
-            E_min = np.min(self.eigenvalues.flatten())
-            E_max = np.max(self.eigenvalues.flatten())
-            E_arr = np.arange(E_min, E_max, dE)
-            energies_number = len(E_arr)
-            DOS_arr = np.zeros(energies_number)
-            for energy_band, weight in zip(self.eigenvalues, self.weights):
-                for energy in energy_band:
-                    place = int((energy - E_arr[0]) / dE)
-                    DOS_arr[place] += weight / dE
-            if zero_at_fermi is False:
-                return E_arr, DOS_arr
-            else:
-                return E_arr - self.efermi, DOS_arr
+        if 'zero_at_fermi' in kwargs:
+            zero_at_fermi = kwargs['zero_at_fermi']
         else:
-            weights_flatten = []
-            for energy_band, weight in zip(self.eigenvalues, self.weights):
-                weights_flatten.append(np.ones(len(energy_band)) * weight)
-            weights_flatten = np.array(weights_flatten).flatten()
-            a = stats.kde.gaussian_kde(self.eigenvalues.flatten(), bw_method=sm_param['bw_method'],
-                                       weights=weights_flatten)
-            if sm_param['E_min'] == 'min':
-                sm_param['E_min'] = np.min(self.eigenvalues.flatten())
-            if sm_param['E_max'] == 'max':
-                sm_param['E_max'] = np.max(self.eigenvalues.flatten())
-            x = np.arange(sm_param['E_min'], sm_param['E_max'], dE)
-            y = a.evaluate(x)
+            zero_at_fermi = False
 
-            i = 0
-            while self.efermi > x[i]:
-                i += 1
+        if 'dE' in kwargs:
+            dE = kwargs['dE']
+        else:
+            dE = 0.01
 
-            integral = simps(y[:i], x[:i])
-            y = (sm_param['nelec'] / integral) * y
+        if 'smearing' in kwargs:
+            smearing = kwargs['smearing']
+        else:
+            smearing = 'Gaussian'
 
-            if zero_at_fermi is False:
-                return x, y
+        if smearing == 'Gaussian':
+            if 'sigma' in kwargs:
+                sigma = kwargs['sigma']
             else:
-                return x - self.efermi, y
+                sigma = 0.02
+            if 'emin' in kwargs:
+                E_min = kwargs['emin']
+            else:
+                E_min = np.min(self.eigenvalues)
+            if 'emax' in kwargs:
+                E_max = kwargs['emax']
+            else:
+                E_max = np.max(self.eigenvalues)
+            E_arr = np.arange(E_min, E_max, dE)
+
+        DOS_arr = np.zeros_like(E_arr)
+        for energy_kpt, weight in zip(self.eigenvalues, self.weights):
+            for energy in energy_kpt:
+                DOS_arr += weight * self._GaussianSmearing(E_arr, energy, sigma)
+                # 2 is not used because sum(weights) = 2
+
+        if zero_at_fermi:
+            return E_arr - self.efermi, DOS_arr
+        else:
+            return E_arr, DOS_arr
