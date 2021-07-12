@@ -1,6 +1,6 @@
 import numpy as np
-from electrochemistry.core.constants import ElemNum2Name, ElemName2Num, Bohr2Angstrom, Angstrom2Bohr
-from electrochemistry.core.structure import Structure
+from ..core.constants import ElemNum2Name, ElemName2Num, Bohr2Angstrom, Angstrom2Bohr
+from ..core.structure import Structure
 
 
 class Cube:
@@ -18,7 +18,6 @@ class Cube:
             self.charges = np.zeros(structure.natoms)
         else:
             self.charges = charges
-
 
     def __repr__(self):
         return f'{self.comment}\n' + f'NX: {self.Ns[0]}\nNY: {self.Ns[1]}\nNZ: {self.Ns[2]}' + repr(self.structure)
@@ -54,13 +53,13 @@ class Cube:
             else:
                 raise ValueError('The sign of the number of all voxels should be > 0 or < 0')
 
-            species = np.zeros(natoms, dtype='<U1')
+            species = []
             charges = np.zeros(natoms)
             coords = np.zeros((natoms, 3))
 
             for atom in range(natoms):
                 line = file.readline().split()
-                species[atom] = ElemNum2Name[int(line[0])]
+                species += ElemNum2Name[int(line[0])]
                 charges[atom] = float(line[1])
                 coords[atom, :] = line[2:]
 
@@ -93,7 +92,6 @@ class Cube:
         except:
             raise ValueError('Try another factor value')
         return Cube(volumetric_data_reduced, self.structure, self.comment, Ns_reduced, self.charges)
-
 
     def to_file(self, filepath):
         with open(filepath, 'w') as file:
