@@ -1,6 +1,6 @@
 from matplotlib import colors
 import numpy as np
-from electrochemistry.core.structure import Structure
+from ..core.structure import Structure
 
 
 class DDEC:

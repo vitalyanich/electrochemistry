@@ -4,13 +4,11 @@ from pymatgen.io.vasp.outputs import Procar
 from electrochemistry.core.vaspwfc_p3 import vaspwfc
 import numpy as np
 import multiprocessing as mp
-import itertools
 import os
 import sys
 import time
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import gaussian_filter1d
-
 
 
 class Preprocessing():
@@ -262,7 +260,7 @@ class Preprocessing():
 
     def process_PROCAR(self, procar_path=None, poscar_path=None, dir_to_save=None):
         """
-        This function process PROCAR file obtained by VASP using pymatgen.io.vasp.outputs.Procar class
+        This function process PROCAR file obtained by VASP using pymatgen.io_data.vasp.outputs.Procar class
         and saves ion_names, orbital_names and data array
         data array contains projections in the following form: data[kpoint][band][ion_number][orbital_number]
         All numberings start from 0

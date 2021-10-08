@@ -1,8 +1,8 @@
 import numpy as np
 from typing import Union, List, Iterable
 from monty.re import regrep
-from electrochemistry.core.structure import Structure
-from electrochemistry.io.universal import Cube
+from ..core.structure import Structure
+from ..io_data.universal import Cube
 
 
 class Poscar:
@@ -240,7 +240,7 @@ class Outcar:
         energy_hist = ([float(i[0][0]) for i in matches['energy']])
         energy_ionic_hist = ([float(i[0][0]) for i in matches['energy_ionic']])
 
-        if matches['spin'] != []:
+        if matches['spin']:
             spin_restricted = True
             nspin = 2
         else:
@@ -377,7 +377,7 @@ class Wavecar:
 
     @staticmethod
     def from_file(filepath, kb_array, ngrid_factor=1.5):
-        from electrochemistry.core.vaspwfc_p3 import vaspwfc
+        from ..core.vaspwfc_p3 import vaspwfc
         wfc = vaspwfc(filepath)
         wavefunctions = []
         for kb in kb_array:
@@ -603,5 +603,14 @@ class Xdatcar:
 
         file.close()
 
+    def mod_coords_to_cartesian(self):
+        if self.structure.coords_are_cartesian is True:
+            return 'Coords are already cartesian'
+        else:
+            self.trajectory = np.matmul(self.trajectory, self.structure.lattice)
+            self.structure.mod_coords_to_cartesian()
+
     def mod_coords_to_box(self):
+        assert self.structure.coords_are_cartesian is False, 'This operation allowed only for NON-cartesian coords'
         self.trajectory %= 1
+        self.structure.coords %= 1

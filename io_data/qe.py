@@ -1,12 +1,10 @@
 import numpy as np
-from seaborn.distributions import stats
-from scipy.integrate import simps
 from monty.re import regrep
 import itertools
 import typing
 
 
-class Output:
+class QEOutput:
     def __init__(self):
         self.patterns = {'nkpts': r'number of k points=\s+([\d]+)',
                          'kpts_coord': r'k\s*=\s*(-?\d.[\d]+)\s*(-?\d.[\d]+)\s*(-?\d.[\d]+)\s*\([\d]+ PWs\)',

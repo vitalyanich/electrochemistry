@@ -4,23 +4,24 @@ from ..core.structure import Structure
 
 
 class Cube:
-    def __init__(self, data, structure, comment=None, Ns_arr=None, charges=None):
+    def __init__(self, data, structure, origin, comment=None, charges=None, dset_ids=None):
         self.volumetric_data = data
         self.structure = structure
+        self.origin = origin
         if comment is None:
-            self.comment = 'Comment if blanc\nGood luck!'
+            self.comment = 'Comment is not defined\nGood luck!'
         self.comment = comment
-        if Ns_arr is None:
-            self.Ns = data.shape
-        else:
-            self.Ns = Ns_arr
         if charges is None:
             self.charges = np.zeros(structure.natoms)
         else:
             self.charges = charges
+        self.dset_ids = dset_ids
 
     def __repr__(self):
-        return f'{self.comment}\n' + f'NX: {self.Ns[0]}\nNY: {self.Ns[1]}\nNZ: {self.Ns[2]}' + repr(self.structure)
+        shape = self.volumetric_data.shape
+        return f'{self.comment}\n' + f'NX: {shape[0]}\nNY: {shape[1]}\nNZ: {shape[2]}\n' + \
+               f'Origin:\n{self.origin[0]:.5f}  {self.origin[1]:.5f}  {self.origin[2]:.5f}\n' + \
+               repr(self.structure)
 
     @staticmethod
     def from_file(filepath):
@@ -32,9 +33,19 @@ class Cube:
             line = file.readline().split()
             natoms = int(line[0])
 
+            if natoms < 0:
+                dset_ids_flag = True
+                natoms = abs(natoms)
+            else:
+                dset_ids_flag = False
+
             origin = np.array([float(line[1]), float(line[2]), float(line[3])])
-            if not all(i == 0 for i in origin):
-                raise ValueError('Cube file with not zero origin can\'t be processed')
+
+            if len(line) == 4:
+                n_data = 1
+            elif len(line) == 5:
+                n_data = int(line[4])
+
             line = file.readline().split()
             NX = int(line[0])
             xaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
@@ -66,15 +77,36 @@ class Cube:
             if units == 'Bohr':
                 lattice = Bohr2Angstrom * lattice
                 coords = Bohr2Angstrom * coords
+                origin = Bohr2Angstrom * origin
+            else:
                 NX, NY, NZ = -NX, -NY, -NZ
 
             structure = Structure(lattice, species, coords, coords_are_cartesian=True)
 
-            data = np.zeros((abs(NX), abs(NY), abs(NZ)))
-            indexes = np.arange(0, abs(NX * NY * NZ))
-            indexes_1 = indexes // abs(NY * NZ)
-            indexes_2 = (indexes // abs(NZ)) % abs(NY)
-            indexes_3 = indexes % abs(NZ)
+            dset_ids = []
+            dset_ids_processed = -1
+            if dset_ids_flag is True:
+                line = file.readline().split()
+                n_data = int(line[0])
+                if n_data < 1:
+                    raise ValueError(f'Bad value of n_data: {n_data}')
+                dset_ids_processed += len(line)
+                dset_ids += [int(i) for i in line[1:]]
+                while dset_ids_processed < n_data:
+                    line = file.readline().split()
+                    dset_ids_processed += len(line)
+                    dset_ids += [int(i) for i in line]
+                dset_ids = np.array(dset_ids)
+
+            if n_data != 1:
+                raise ValueError(f'The processing of cube files with more than 1 data values is not implemented.'
+                                 f' n_data = {n_data}')
+
+            data = np.zeros((NX, NY, NZ))
+            indexes = np.arange(0, NX * NY * NZ)
+            indexes_1 = indexes // (NY * NZ)
+            indexes_2 = (indexes // NZ) % NY
+            indexes_3 = indexes % NZ
 
             i = 0
             for line in file:
@@ -82,7 +114,7 @@ class Cube:
                     data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
                     i += 1
 
-            return Cube(data, structure, comment, np.array([NX, NY, NZ]), charges)
+            return Cube(data, structure, origin, comment, charges, dset_ids)
 
     def reduce(self, factor):
         from skimage.measure import block_reduce
@@ -93,39 +125,82 @@ class Cube:
             raise ValueError('Try another factor value')
         return Cube(volumetric_data_reduced, self.structure, self.comment, Ns_reduced, self.charges)
 
-    def to_file(self, filepath):
+    def to_file(self, filepath, units='Bohr'):
+        if not self.structure.coords_are_cartesian:
+            self.structure.mod_coords_to_cartesian()
+
+        Ns = self.volumetric_data.shape
+        width_Ni = len(str(np.max(Ns)))
+        if units == 'Angstrom':
+            Ns = - Ns
+            width_Ni += 1
+            width_lattice = len(str(int(np.max(self.structure.lattice)))) + 7
+            width_coord = len(str(int(np.max(self.structure.coords)))) + 7
+        elif units == 'Bohr':
+            lattice = self.structure.lattice * Angstrom2Bohr
+            coords = self.structure.coords * Angstrom2Bohr
+            origin = self.origin * Angstrom2Bohr
+            width_lattice = len(str(int(np.max(lattice)))) + 7
+            width_coord = len(str(int(np.max(coords)))) + 7
+        else:
+            raise ValueError(f'Irregular units flag: {units}. Units must be \'Bohr\' or \'Angstrom\'')
+
+        if np.sum(self.structure.lattice < 0):
+            width_lattice += 1
+        if np.sum(self.structure.coords < 0):
+            width_coord += 1
+        width = np.max([width_lattice, width_coord])
+
+        if self.dset_ids is not None:
+            natoms = - self.structure.natoms
+        else:
+            natoms = self.structure.natoms
+        width_natoms = len(str(natoms))
+        width_1_column = max(width_Ni, width_natoms)
+
         with open(filepath, 'w') as file:
             file.write(self.comment)
 
-            width_Ni = len(str(np.max(self.Ns)))
-            width_lattice = len(str(int(np.max(self.structure.lattice)))) + 7
-            if np.sum(self.structure.lattice < 0):
-                width_lattice += 1
-            width_coord = len(str(int(np.max(self.structure.coords)))) + 7
-            if np.sum(self.structure.coords < 0):
-                width_coord += 1
-            width = np.max([width_lattice, width_coord])
+            if units == 'Angstrom':
+                file.write(f'  {natoms:{width_1_column}}   {self.origin[0]:{width}.6f} '
+                           f'  {self.origin[1]:{width}.6f}   {self.origin[2]:{width}.6f}\n')
+                for N_i, lattice_vector in zip(Ns, self.structure.lattice):
+                    file.write(f'  {N_i:{width_1_column}}   {lattice_vector[0]:{width}.6f} '
+                               f'  {lattice_vector[1]:{width}.6f}   {lattice_vector[2]:{width}.6f}\n')
+                for atom_name, charge, coord in zip(self.structure.species, self.charges, self.structure.coords):
+                    file.write(
+                        f'  {ElemName2Num[atom_name]:{width_1_column}}   {charge:{width}.6f} '
+                        f'  {coord[0]:{width}.6f}   {coord[1]:{width}.6f}   {coord[2]:{width}.6f}\n')
 
-            file.write(f'  {self.structure.natoms:{width_Ni}}    {0:{width}.6f}    {0:{width}.6f}    {0:{width}.6f}\n')
+            elif units == 'Bohr':
+                file.write(f'  {natoms:{width_1_column}}   {origin[0]:{width}.6f} '
+                           f'  {origin[1]:{width}.6f}   {origin[2]:{width}.6f}\n')
+                for N_i, lattice_vector in zip(Ns, lattice):
+                    file.write(f'  {N_i:{width_1_column}}   {lattice_vector[0]:{width}.6f} '
+                               f'  {lattice_vector[1]:{width}.6f}   {lattice_vector[2]:{width}.6f}\n')
+                for atom_name, charge, coord in zip(self.structure.species, self.charges, coords):
+                    file.write(
+                        f'  {ElemName2Num[atom_name]:{width_1_column}}   {charge:{width}.6f} '
+                        f'  {coord[0]:{width}.6f}   {coord[1]:{width}.6f}   {coord[2]:{width}.6f}\n')
 
-            for N_i, lattice_vector in zip(self.Ns, self.structure.lattice):
-                file.write(f'  {N_i:{width_Ni}}    {lattice_vector[0]:{width}.6f}    {lattice_vector[1]:{width}.6f}    {lattice_vector[2]:{width}.6f}\n')
+            if self.dset_ids is not None:
+                m = len(self.dset_ids)
+                file.write(f'  {m:{width_1_column}}' + '   ')
+                for dset_id in self.dset_ids:
+                    file.write(str(dset_id) + '   ')
+                file.write('\n')
 
-            if not self.structure.coords_are_cartesian:
-                self.structure.mod_coords_to_cartesian()
+            for i in range(abs(Ns[0])):
+                for j in range(abs(Ns[1])):
+                    for k in range(abs(Ns[2])):
+                        file.write(str('  %.5E' % self.volumetric_data[i][j][k]))
+                        if k % 6 == 5:
+                            file.write('\n')
+                    file.write('\n')
 
-            for atom_name, charge, coord in zip(self.structure.species, self.charges, self.structure.coords):
-                file.write(f'  {ElemName2Num[atom_name]:{width_Ni}}    {charge:{width}.6f}    {coord[0]:{width}.6f}    {coord[1]:{width}.6f}    {coord[2]:{width}.6f}\n')
-
-            counter = 0
-            file.write('  ')
-            for i in range(abs(self.Ns[0])):
-                for j in range(abs(self.Ns[1])):
-                    for k in range(abs(self.Ns[2])):
-                        file.write(str('%.5E' % self.volumetric_data[i][j][k]) + '  ')
-                        counter += 1
-                        if counter % 6 == 0:
-                            file.write('\n  ')
+    def mod_to_zero_origin(self):
+        self.structure.coords -= self.origin
+        self.origin = np.zeros(3)
 
     def get_average_along_axis(self, axis):
         """
@@ -166,6 +241,30 @@ class Cube:
         else:
             return scale * np.max(avr)
 
+    def assign_top_n_data_to_atoms(self, n_top, r):
+        """Assign top n abs of volumetric data to atoms. Might be used to assign electron density to atoms.
+
+        Args:
+            n_top (int): Number of voxels that will be analysed
+            r (float): Radius. A voxel is considered belonging to atom is the distance between the voxel center and ]
+            atom is less than r.
+
+        Returns:
+            (np.ndarray): Array of boolean values. I-th raw represents i-th atom, j-th column represents j-th voxel
+        """
+        sorted_indices = np.array(np.unravel_index(np.argsort(-np.abs(self.volumetric_data), axis=None),
+                                                   self.volumetric_data.shape)).T
+        translation_vector = np.sum(self.structure.lattice, axis=0)
+        voxels_centres = sorted_indices[:n_top, :] * translation_vector + translation_vector / 2 + self.origin
+
+        atom_indices = list(range(self.structure.natoms))
+
+        if self.structure.natoms == 1:
+            return np.linalg.norm(voxels_centres - self.structure.coords[0], axis=-1) < r
+        else:
+            return np.linalg.norm(np.broadcast_to(voxels_centres, (self.structure.natoms,) + voxels_centres.shape) -
+                                  np.expand_dims(self.structure.coords[atom_indices], axis=1), axis=-1) < r
+
 
 class Xyz:
     def __init__(self, structure, comment):
@@ -188,3 +287,30 @@ class Xyz:
             struct = Structure(np.zeros((3, 3)), species, coords, coords_are_cartesian=True)
 
         return Xyz(struct, comment)
+
+
+class XyzTrajectory:
+    def __init__(self, first_xyz, trajectory):
+        self.first_xyz = first_xyz
+        self.trajectory = trajectory
+
+    @staticmethod
+    def from_file(filepath):
+        first_xyz = Xyz.from_file(filepath)
+
+        trajectory = []
+        with open(filepath, 'rt') as file:
+            while True:
+                try:
+                    natoms = int(file.readline().strip())
+                except:
+                    break
+                file.readline()
+
+                coords = np.zeros((natoms, 3))
+                for i in range(natoms):
+                    line = file.readline().split()
+                    coords[i] = [float(j) for j in line[1:]]
+                trajectory.append(coords)
+
+        return XyzTrajectory(first_xyz, np.array(trajectory))

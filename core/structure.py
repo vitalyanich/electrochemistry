@@ -120,7 +120,7 @@ class Structure:
             else:
                 self.species[ids] = species
 
-    def mod_coords_to_cartesian(self) -> None:
+    def mod_coords_to_cartesian(self) -> Union[None, str]:
         """
         Converts species coordinates to Cartesian coordination system.
         """
@@ -130,7 +130,7 @@ class Structure:
             self.coords = np.matmul(self.coords, self.lattice)
             self.coords_are_cartesian = True
 
-    def mod_coords_to_direct(self) -> None:
+    def mod_coords_to_direct(self) -> Union[None, str]:
         """
         Converts species coordinates to Direct coordination system.
         """

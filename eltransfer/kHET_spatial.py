@@ -4,17 +4,18 @@ from .GerischerMarkus import GM
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from electrochemistry.core import constants
-from electrochemistry.io import vasp
+from core import constants
+from io_data import vasp
 
-class kHET():
+
+class kHET:
     """
     This class calculates heterogeneous electron transfer rate constant with spatial resolution
     """
     # TODO update tips types
 
     AVAILABLE_TIPS_TYPES = ['oxygen', 'IrCl6', 'RuNH3_6', 'RuNH3_6_NNN_plane', 'RuNH3_6_perpendicular',
-                                 'oxygen_parallel_x', 'oxygen_parallel_y']
+                            'oxygen_parallel_x', 'oxygen_parallel_y']
 
     def __init__(self, working_folder=''):
         if working_folder == '':
@@ -34,7 +35,6 @@ class kHET():
         self.dE_Q = None
         self.kb_array = None
         self.E = None
-
 
     def set_parameters(self, T, lambda_, overpot=0, V_std=None, C_EDL=None, dE_Q=None, linear_constant=26, threshold_value=1e-5):
         """
