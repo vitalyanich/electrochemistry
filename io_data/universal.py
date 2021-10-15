@@ -8,13 +8,17 @@ class Cube:
         self.volumetric_data = data
         self.structure = structure
         self.origin = origin
+
         if comment is None:
-            self.comment = 'Comment is not defined\nGood luck!'
-        self.comment = comment
+            self.comment = 'Comment is not defined\nGood luck!\n'
+        else:
+            self.comment = comment
+
         if charges is None:
             self.charges = np.zeros(structure.natoms)
         else:
             self.charges = charges
+
         self.dset_ids = dset_ids
 
     def __repr__(self):
