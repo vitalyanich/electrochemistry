@@ -8,7 +8,7 @@ from ..io_data.universal import Cube
 class Poscar:
     """Class that reads VASP POSCAR files"""
     def __init__(self,
-                 structure,
+                 structure: Structure,
                  comment: str = None,
                  sdynamics_data=None):
         """
@@ -173,30 +173,32 @@ class Poscar:
 class Outcar:
     """Class that reads VASP OUTCAR files"""
 
-    def __init__(self, nkpts, nbands, natoms, weights, nisteps, spin_polarized, efermi_hist=None, eigenvalues_hist=None,
+    def __init__(self, nkpts, nbands, natoms, weights, nisteps, nspin, efermi_hist=None, eigenvalues_hist=None,
                  occupations_hist=None, energy_hist=None, energy_ionic_hist=None, forces_hist=None):
         self.nkpts = nkpts
         self.nbands = nbands
         self.natoms = natoms
         self.weights = weights
         self.nisteps = nisteps
-        self.spin_polarized = spin_polarized
+        self.nspin = nspin
 
         self.forces_hist = forces_hist
         self.efermi_hist = efermi_hist
         self.energy_hist = energy_hist
         self.energy_ionic_hist = energy_ionic_hist
 
-        if spin_polarized:
+        if nspin == 2:
             self.eigenvalues = eigenvalues_hist[-1]
             self.occupations = occupations_hist[-1]
             self.eigenvalues_hist = eigenvalues_hist
             self.occupations_hist = occupations_hist
-        else:
+        elif nspin == 1:
             self.eigenvalues = eigenvalues_hist[-1][0]
             self.occupations = occupations_hist[-1][0]
             self.eigenvalues_hist = eigenvalues_hist[:, 0, :, :]
             self.occupations_hist = occupations_hist[:, 0, :, :]
+        else:
+            raise ValueError(f'nspin should be equal to 1 or 2 but you set {nspin=}')
 
     @property
     def forces(self):
@@ -241,10 +243,8 @@ class Outcar:
         energy_ionic_hist = ([float(i[0][0]) for i in matches['energy_ionic']])
 
         if matches['spin']:
-            spin_restricted = True
             nspin = 2
         else:
-            spin_restricted = False
             nspin = 1
 
         if nkpts == 1:
@@ -260,7 +260,7 @@ class Outcar:
         for i in range(len(arr)):
             efermi_hist[i] = float(arr[i][0][0])
 
-        nisteps = len(efermi_hist)
+        nisteps = len(energy_ionic_hist)
         eigenvalues_hist = np.zeros((nisteps, nspin, nkpts, nbands))
         occupations_hist = np.zeros((nisteps, nspin, nkpts, nbands))
 
@@ -281,10 +281,11 @@ class Outcar:
                 line = line[0].split()
                 forces_hist[step, atom] = [float(line[3]), float(line[4]), float(line[5])]
 
-        return Outcar(nkpts, nbands, natoms, weights, nisteps, spin_restricted, efermi_hist, eigenvalues_hist, occupations_hist,
+        return Outcar(nkpts, nbands, natoms, weights, nisteps, nspin, efermi_hist, eigenvalues_hist, occupations_hist,
                       energy_hist, energy_ionic_hist, forces_hist)
 
-    def get_band_eigs(self, bands):
+    def get_band_eigs(self,
+                      bands: Union[int, Iterable]):
         if type(bands) is int:
             return np.array([eig for eig in self.eigenvalues[:, bands]])
         elif isinstance(bands, Iterable):
@@ -292,7 +293,8 @@ class Outcar:
         else:
             raise ValueError('Variable bands should be int or iterable')
 
-    def get_band_occ(self, bands):
+    def get_band_occ(self,
+                     bands: Union[int, Iterable]):
         if type(bands) is int:
             return [occ for occ in self.occupations[:, bands]]
         elif isinstance(bands, Iterable):
@@ -347,18 +349,20 @@ class Outcar:
                 E_max = np.max(self.eigenvalues)
             E_arr = np.arange(E_min, E_max, dE)
 
-            if not self.spin_polarized:
+            if self.nspin == 1:
                 DOS_arr = np.zeros_like(E_arr)
                 for energy_kpt, weight in zip(self.eigenvalues, self.weights):
                     for energy in energy_kpt:
                         DOS_arr += 2 * weight * self._GaussianSmearing(E_arr, energy, sigma)
                         # 2 above means occupancy for spin unrestricted calculation
-            else:
+            elif self.nspin == 2:
                 DOS_arr = np.zeros((2,) + np.shape(E_arr))
                 for spin in range(2):
                     for energy_kpt, weight in zip(self.eigenvalues[spin], self.weights):
                         for energy in energy_kpt:
                             DOS_arr[spin] += weight * self._GaussianSmearing(E_arr, energy, sigma)
+            else:
+                raise ValueError(f'nspin should be equal to 1 or 2 but you set {self.nspin=}')
 
             if zero_at_fermi:
                 return E_arr - self.efermi, DOS_arr
