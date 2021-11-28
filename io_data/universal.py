@@ -59,7 +59,6 @@ class Cube:
             line = file.readline().split()
             NZ = int(line[0])
             zaxis = np.array([float(line[1]), float(line[2]), float(line[3])])
-            lattice = np.array([xaxis, yaxis, zaxis])
 
             if NX > 0 and NY > 0 and NZ > 0:
                 units = 'Bohr'
@@ -67,6 +66,11 @@ class Cube:
                 units = 'Angstrom'
             else:
                 raise ValueError('The sign of the number of all voxels should be > 0 or < 0')
+
+            if units == 'Angstrom':
+                NX, NY, NZ = -NX, -NY, -NZ
+
+            lattice = np.array([xaxis * NX, yaxis * NY, zaxis * NZ])
 
             species = []
             charges = np.zeros(natoms)
@@ -82,8 +86,6 @@ class Cube:
                 lattice = Bohr2Angstrom * lattice
                 coords = Bohr2Angstrom * coords
                 origin = Bohr2Angstrom * origin
-            else:
-                NX, NY, NZ = -NX, -NY, -NZ
 
             structure = Structure(lattice, species, coords, coords_are_cartesian=True)
 
@@ -141,7 +143,7 @@ class Cube:
             width_lattice = len(str(int(np.max(self.structure.lattice)))) + 7
             width_coord = len(str(int(np.max(self.structure.coords)))) + 7
         elif units == 'Bohr':
-            lattice = self.structure.lattice * Angstrom2Bohr
+            lattice = self.get_voxel() * Angstrom2Bohr
             coords = self.structure.coords * Angstrom2Bohr
             origin = self.origin * Angstrom2Bohr
             width_lattice = len(str(int(np.max(lattice)))) + 7
@@ -168,7 +170,7 @@ class Cube:
             if units == 'Angstrom':
                 file.write(f'  {natoms:{width_1_column}}   {self.origin[0]:{width}.6f} '
                            f'  {self.origin[1]:{width}.6f}   {self.origin[2]:{width}.6f}\n')
-                for N_i, lattice_vector in zip(Ns, self.structure.lattice):
+                for N_i, lattice_vector in zip(Ns, self.get_voxel()):
                     file.write(f'  {N_i:{width_1_column}}   {lattice_vector[0]:{width}.6f} '
                                f'  {lattice_vector[1]:{width}.6f}   {lattice_vector[2]:{width}.6f}\n')
                 for atom_name, charge, coord in zip(self.structure.species, self.charges, self.structure.coords):
@@ -244,6 +246,15 @@ class Cube:
             return np.max(avr)
         else:
             return scale * np.max(avr)
+
+    def get_voxel(self):
+        NX, NY, NZ = self.volumetric_data.shape
+        voxel = self.structure.lattice.copy()
+        voxel[0] /= NX
+        voxel[1] /= NY
+        voxel[2] /= NZ
+
+        return voxel
 
     def assign_top_n_data_to_atoms(self, n_top, r):
         """Assign top n abs of volumetric data to atoms. Might be used to assign electron density to atoms.
