@@ -157,6 +157,32 @@ class Structure:
         self.coords += vector
         self.coords %= np.array([1, 1, 1])
 
+    def mod_propagate_unit_cell(self, a, b, c) -> None:
+        """Extend the unit cell by propagation on lattice vector direction. The resulted unit cell will be the size
+        of [a * lattice[0], b * lattice[1], c * lattice[2]]. All atoms will be replicated with accordance of new
+        unit cell size
+        Args:
+            a (int): the number of replicas in the directions of the first unit cell vector
+            b (int): the number of replicas in the directions of the second unit cell vector
+            c (int): the number of replicas in the directions of the third unit cell vector.
+        """
+        if not (isinstance(a, int) and isinstance(b, int) and isinstance(c, int)):
+            raise ValueError(f'a, b and c must be integers. But a, b, c have types {type(a), type(b), type(c)}')
+
+        if a * b * c > 1:
+            self.mod_coords_to_cartesian()
+            ref_coords = self.coords.copy()
+            ref_species = self.species.copy()
+
+            for i in range(a):
+                for j in range(b):
+                    for k in range(c):
+                        if i != 0 or j != 0 or k != 0:
+                            vector = np.sum(np.array([i, j, k]).reshape(-1, 1) * self.lattice, axis=0)
+                            self.coords = np.vstack((self.coords, ref_coords + vector))
+                            self.species += ref_species
+            self.lattice = np.array([a, b, c]).reshape(-1, 1) * self.lattice
+
     def get_vector(self, id_1, id_2, unit=True) -> np.ndarray:
         """
         Returns a vector (unit vector by default) which starts in the atom with id_1 and points to the atom with id_2
