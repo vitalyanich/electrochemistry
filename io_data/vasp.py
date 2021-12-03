@@ -3,6 +3,7 @@ from typing import Union, List, Iterable
 from monty.re import regrep
 from ..core.structure import Structure
 from ..io_data.universal import Cube
+from ..core.EBS import EBS
 
 
 class Poscar:
@@ -170,23 +171,23 @@ class Poscar:
         pass
 
 
-class Outcar:
+class Outcar(EBS):
     """Class that reads VASP OUTCAR files"""
 
-    def __init__(self, nkpts, nbands, natoms, weights, nisteps, nspin, efermi_hist=None, eigenvalues_hist=None,
-                 occupations_hist=None, energy_hist=None, energy_ionic_hist=None, forces_hist=None):
-        self.nkpts = nkpts
-        self.nbands = nbands
-        self.natoms = natoms
+    def __init__(self, weights: np.ndarray,
+                 efermi_hist: np.ndarray = None,
+                 eigenvalues_hist: np.ndarray = None,
+                 occupations_hist: np.ndarray = None,
+                 energy_hist: np.ndarray = None,
+                 energy_ionic_hist: np.ndarray = None,
+                 forces_hist: np.ndarray = None):
         self.weights = weights
-        self.nisteps = nisteps
-        self.nspin = nspin
-
         self.forces_hist = forces_hist
         self.efermi_hist = efermi_hist
         self.energy_hist = energy_hist
         self.energy_ionic_hist = energy_ionic_hist
 
+        nspin = eigenvalues_hist.shape[1]
         if nspin == 2:
             self.eigenvalues = eigenvalues_hist[-1]
             self.occupations = occupations_hist[-1]
@@ -201,6 +202,14 @@ class Outcar:
             raise ValueError(f'nspin should be equal to 1 or 2 but you set {nspin=}')
 
     @property
+    def natoms(self):
+        return self.forces.shape[0]
+
+    @property
+    def nisteps(self):
+        return self.eigenvalues_hist.shape[0]
+
+    @property
     def forces(self):
         return self.forces_hist[-1]
 
@@ -213,34 +222,28 @@ class Outcar:
         return self.energy_ionic_hist[-1]
 
     @staticmethod
-    def _GaussianSmearing(x, x0, sigma):
-        """Simulate the Delta function by a Gaussian shape function"""
-
-        return 1 / (np.sqrt(2 * np.pi) * sigma) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
-
-    @staticmethod
     def from_file(filepath):
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
 
-        patterns = {'nkpts': 'k-points\s+NKPTS\s+=\s+(\d+)',
-                    'nbands': 'number of bands\s+NBANDS=\s+(\d+)',
-                    'natoms': 'NIONS\s+=\s+(\d+)',
+        patterns = {'nkpts': r'k-points\s+NKPTS\s+=\s+(\d+)',
+                    'nbands': r'number of bands\s+NBANDS=\s+(\d+)',
+                    'natoms': r'NIONS\s+=\s+(\d+)',
                     'weights': 'Following reciprocal coordinates:',
-                    'efermi': 'E-fermi\s:\s+([-.\d]+)',
-                    'energy': 'free energy\s+TOTEN\s+=\s+(.\d+\.\d+)\s+eV',
-                    'energy_ionic': 'free  energy\s+TOTEN\s+=\s+(.\d+\.\d+)\s+eV',
+                    'efermi': r'E-fermi\s:\s+([-.\d]+)',
+                    'energy': r'free energy\s+TOTEN\s+=\s+(.\d+\.\d+)\s+eV',
+                    'energy_ionic': r'free  energy\s+TOTEN\s+=\s+(.\d+\.\d+)\s+eV',
                     'kpoints': r'k-point\s+(\d+)\s:\s+[-.\d]+\s+[-.\d]+\s+[-.\d]+\n',
-                    'forces': '\s+POSITION\s+TOTAL-FORCE',
-                    'spin': 'spin component \d+\n'}
+                    'forces': r'\s+POSITION\s+TOTAL-FORCE',
+                    'spin': r'spin component \d+\n'}
         matches = regrep(filepath, patterns)
 
         nbands = int(matches['nbands'][0][0][0])
         nkpts = int(matches['nkpts'][0][0][0])
         natoms = int(matches['natoms'][0][0][0])
-        energy_hist = ([float(i[0][0]) for i in matches['energy']])
-        energy_ionic_hist = ([float(i[0][0]) for i in matches['energy_ionic']])
+        energy_hist = np.array([float(i[0][0]) for i in matches['energy']])
+        energy_ionic_hist = np.array([float(i[0][0]) for i in matches['energy_ionic']])
 
         if matches['spin']:
             nspin = 2
@@ -248,7 +251,7 @@ class Outcar:
             nspin = 1
 
         if nkpts == 1:
-            weights = [float(data[matches['weights'][0][1] + 2].split()[3])]
+            weights = np.array([float(data[matches['weights'][0][1] + 2].split()[3])])
         else:
             weights = np.zeros(nkpts)
             for i in range(nkpts):
@@ -281,93 +284,8 @@ class Outcar:
                 line = line[0].split()
                 forces_hist[step, atom] = [float(line[3]), float(line[4]), float(line[5])]
 
-        return Outcar(nkpts, nbands, natoms, weights, nisteps, nspin, efermi_hist, eigenvalues_hist, occupations_hist,
+        return Outcar(weights, efermi_hist, eigenvalues_hist, occupations_hist,
                       energy_hist, energy_ionic_hist, forces_hist)
-
-    def get_band_eigs(self,
-                      bands: Union[int, Iterable]):
-        if type(bands) is int:
-            return np.array([eig for eig in self.eigenvalues[:, bands]])
-        elif isinstance(bands, Iterable):
-            return np.array([[eig for eig in self.eigenvalues[:, band]] for band in bands])
-        else:
-            raise ValueError('Variable bands should be int or iterable')
-
-    def get_band_occ(self,
-                     bands: Union[int, Iterable]):
-        if type(bands) is int:
-            return [occ for occ in self.occupations[:, bands]]
-        elif isinstance(bands, Iterable):
-            return np.array([[occ for occ in self.occupations[:, band]] for band in bands])
-        else:
-            raise ValueError('Variable bands should be int or iterable')
-
-    def get_DOS(self, **kwargs):
-
-        # TODO: Add if smearing == False, add if smearing == "Lorenz", Check *2 electrons/states?
-        """Calculate Density of States based on eigenvalues and its weights
-
-        Args:
-            dE (float, optional): step of energy array in function's output. Default value is 0.01
-            zero_at_fermi (bool, optional): if True Fermi energy will be equal to zero
-            emin (float, optional): minimum value in DOS calculation.
-            emax (float, optional): maximum value in DOS calculation.
-            smearing (str, optional): define whether will be used smearing or not. Default value is 'Gaussian'.
-            Possible options: 'Gaussian'
-            sigma (float, optional): define the sigma parameter in Gaussian smearing. Default value is 0.02
-
-        Returns:
-            E, DOS - Two 1D np.arrays that contain energy and according DOS values
-        """
-        if 'zero_at_fermi' in kwargs:
-            zero_at_fermi = kwargs['zero_at_fermi']
-        else:
-            zero_at_fermi = False
-
-        if 'dE' in kwargs:
-            dE = kwargs['dE']
-        else:
-            dE = 0.01
-
-        if 'smearing' in kwargs:
-            smearing = kwargs['smearing']
-        else:
-            smearing = 'Gaussian'
-
-        if smearing == 'Gaussian':
-            if 'sigma' in kwargs:
-                sigma = kwargs['sigma']
-            else:
-                sigma = 0.02
-            if 'emin' in kwargs:
-                E_min = kwargs['emin']
-            else:
-                E_min = np.min(self.eigenvalues)
-            if 'emax' in kwargs:
-                E_max = kwargs['emax']
-            else:
-                E_max = np.max(self.eigenvalues)
-            E_arr = np.arange(E_min, E_max, dE)
-
-            if self.nspin == 1:
-                DOS_arr = np.zeros_like(E_arr)
-                for energy_kpt, weight in zip(self.eigenvalues, self.weights):
-                    for energy in energy_kpt:
-                        DOS_arr += 2 * weight * self._GaussianSmearing(E_arr, energy, sigma)
-                        # 2 above means occupancy for spin unrestricted calculation
-            elif self.nspin == 2:
-                DOS_arr = np.zeros((2,) + np.shape(E_arr))
-                for spin in range(2):
-                    for energy_kpt, weight in zip(self.eigenvalues[spin], self.weights):
-                        for energy in energy_kpt:
-                            DOS_arr[spin] += weight * self._GaussianSmearing(E_arr, energy, sigma)
-            else:
-                raise ValueError(f'nspin should be equal to 1 or 2 but you set {self.nspin=}')
-
-            if zero_at_fermi:
-                return E_arr - self.efermi, DOS_arr
-            else:
-                return E_arr, DOS_arr
 
 
 class Wavecar:

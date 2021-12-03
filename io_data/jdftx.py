@@ -5,8 +5,7 @@ from ..core.constants import Bohr2Angstrom
 
 
 class Ionpos:
-    def __init__(self,
-                 structure: Structure):
+    def __init__(self, structure: Structure):
         pass
 
     @staticmethod
