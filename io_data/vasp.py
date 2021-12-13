@@ -4,6 +4,7 @@ from monty.re import regrep
 from ..core.structure import Structure
 from ..io_data.universal import Cube
 from ..core.EBS import EBS
+from pymatgen.io.vasp import Procar as Procar_pmg
 
 
 class Poscar:
@@ -187,19 +188,10 @@ class Outcar(EBS):
         self.energy_hist = energy_hist
         self.energy_ionic_hist = energy_ionic_hist
 
-        nspin = eigenvalues_hist.shape[1]
-        if nspin == 2:
-            self.eigenvalues = eigenvalues_hist[-1]
-            self.occupations = occupations_hist[-1]
-            self.eigenvalues_hist = eigenvalues_hist
-            self.occupations_hist = occupations_hist
-        elif nspin == 1:
-            self.eigenvalues = eigenvalues_hist[-1][0]
-            self.occupations = occupations_hist[-1][0]
-            self.eigenvalues_hist = eigenvalues_hist[:, 0, :, :]
-            self.occupations_hist = occupations_hist[:, 0, :, :]
-        else:
-            raise ValueError(f'nspin should be equal to 1 or 2 but you set {nspin=}')
+        self.eigenvalues = eigenvalues_hist[-1]
+        self.occupations = occupations_hist[-1]
+        self.eigenvalues_hist = eigenvalues_hist
+        self.occupations_hist = occupations_hist
 
     @property
     def natoms(self):
@@ -311,8 +303,91 @@ class Wavecar:
 
 
 class Procar:
-    # TODO create Procar class
-    pass
+    def __init__(self, proj_koeffs, orbital_names):
+        self.proj_koeffs = proj_koeffs
+        self.eigenvalues = None
+        self.weights = None
+        self.nspin = None
+        self.nkpts = None
+        self.nbands = None
+        self.efermi = None
+        self.natoms = None
+        self.norbs = proj_koeffs.shape[4]
+
+    @staticmethod
+    def from_file(filepath):
+        procar = Procar_pmg(filepath)
+        spin_keys = list(procar.data.keys())
+        proj_koeffs = np.zeros((len(spin_keys),) + procar.data[spin_keys[0]].shape)
+
+        for i, spin_key in enumerate(spin_keys):
+            proj_koeffs[i] = procar.data[spin_key]
+
+        return Procar(proj_koeffs, procar.orbitals)
+
+    def get_PDOS(self, outcar: Outcar, atom_numbers, **kwargs):
+        self.eigenvalues = outcar.eigenvalues
+        self.weights = outcar.weights
+        self.nspin = outcar.nspin
+        self.nkpts = outcar.nkpts
+        self.nbands = outcar.nbands
+        self.efermi = outcar.efermi
+        self.natoms = outcar.natoms
+
+        if 'zero_at_fermi' in kwargs:
+            zero_at_fermi = kwargs['zero_at_fermi']
+        else:
+            zero_at_fermi = False
+
+        if 'dE' in kwargs:
+            dE = kwargs['dE']
+        else:
+            dE = 0.01
+
+        if 'smearing' in kwargs:
+            smearing = kwargs['smearing']
+        else:
+            smearing = 'Gaussian'
+
+        if smearing == 'Gaussian':
+            if 'sigma' in kwargs:
+                sigma = kwargs['sigma']
+            else:
+                sigma = 0.02
+            if 'emin' in kwargs:
+                E_min = kwargs['emin']
+            else:
+                E_min = np.min(self.eigenvalues)
+            if 'emax' in kwargs:
+                E_max = kwargs['emax']
+            else:
+                E_max = np.max(self.eigenvalues)
+
+        E_arr = np.arange(E_min, E_max, dE)
+        ngrid = E_arr.shape[0]
+
+        proj_coeffs_weighted = self.proj_koeffs[:, :, :, atom_numbers, :]
+
+        for spin in range(self.nspin):
+            for i, weight_kpt in enumerate(self.weights):
+                proj_coeffs_weighted[spin, i] *= weight_kpt
+
+        W_arr = np.moveaxis(proj_coeffs_weighted, [2, 3, 4], [4, 2, 3])
+        G_arr = EBS.GaussianSmearing(E_arr, self.eigenvalues, sigma)
+
+        PDOS_arr = np.zeros((self.nspin, len(atom_numbers), self.norbs, ngrid))
+        for spin in range(self.nspin):
+            for atom in range(len(atom_numbers)):
+                PDOS_arr[spin, atom] = np.sum(G_arr[spin, :, None, :, :] * W_arr[spin, :, atom, :, :, None],
+                                              axis=(0, 2))
+
+        if self.nspin == 1:
+            PDOS_arr *= 2
+
+        if zero_at_fermi:
+            return E_arr - self.efermi, PDOS_arr
+        else:
+            return E_arr, PDOS_arr
 
 
 class Chgcar:

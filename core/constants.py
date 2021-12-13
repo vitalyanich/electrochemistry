@@ -15,6 +15,8 @@ ElemName2Num = {v: k for k, v in zip(ElemNum2Name.keys(), ElemNum2Name.values())
 
 Bohr2Angstrom = 0.529177 #? TODO Check it, it is Angstrom to Bohr value
 Angstrom2Bohr = 1 / Bohr2Angstrom
+Hartree2eV = 27.2114
+eV2Hartree = 1 / Hartree2eV
 
 PLANCK_CONSTANT = 4.135667662e-15  # Planck's constant in eV*s
 BOLTZMANN_CONSTANT = 8.617333262145e-5  # Boltzmann's constant in eV/K

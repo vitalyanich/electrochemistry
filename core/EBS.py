@@ -19,16 +19,22 @@ class EBS:
 
     @property
     def nspin(self):
-        if len(self.eigenvalues.shape) == 2:
-            return 1
-        elif len(self.eigenvalues.shape) == 3:
-            return self.eigenvalues.shape[0]
+        return self.eigenvalues.shape[0]
 
     @staticmethod
-    def _GaussianSmearing(x, x0, sigma):
-        """Simulate the Delta function by a Gaussian shape function"""
+    def GaussianSmearing(E: np.ndarray, E0: np.ndarray, sigma: Union[int, float]):
+        """
+        Blur the Delta function by a Gaussian function
+        Args:
+            E: Numpy array with the shape (ngrid, ) that represents the energy range for the Gaussian smearing
+            E0: Numpy array with any shape (i.e. (nspin, nkpts, nbands)) that contains eigenvalues
+            sigma: the broadening parameter for the Gaussian function
 
-        return 1 / (np.sqrt(2 * np.pi) * sigma) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
+        Returns:
+            Smeared eigenvalues on grind E with the shape E0.shape + E.shape
+        """
+        return 1 / (np.sqrt(2 * np.pi) * sigma) * np.exp(
+            -(np.broadcast_to(E, E0.shape + E.shape) - np.expand_dims(E0, len(E0.shape))) ** 2 / (2 * sigma ** 2))
 
     def __get_by_bands(self,  property: str, bands: Union[int, Iterable]):
         property = getattr(self, property)
@@ -96,22 +102,14 @@ class EBS:
                 E_max = kwargs['emax']
             else:
                 E_max = np.max(self.eigenvalues)
-            E_arr = np.arange(E_min, E_max, dE)
 
+            E_arr = np.arange(E_min, E_max, dE)
+            DOS_arr = np.sum(self.weights[None, :, None, None] *
+                             self.GaussianSmearing(E_arr, self.eigenvalues, sigma), axis=(1, 2))
+
+            # 2 means occupancy for spin non-spinpolarized calculation
             if self.nspin == 1:
-                DOS_arr = np.zeros_like(E_arr)
-                for energy_kpt, weight in zip(self.eigenvalues, self.weights):
-                    for energy in energy_kpt:
-                        DOS_arr += 2 * weight * self._GaussianSmearing(E_arr, energy, sigma)
-                        # 2 above means occupancy for spin unrestricted calculation
-            elif self.nspin > 1:
-                DOS_arr = np.zeros((self.nspin,) + np.shape(E_arr))
-                for spin in range(self.nspin):
-                    for energy_kpt, weight in zip(self.eigenvalues[spin], self.weights):
-                        for energy in energy_kpt:
-                            DOS_arr[spin] += weight * self._GaussianSmearing(E_arr, energy, sigma)
-            else:
-                raise ValueError(f'nspin should be equal to 1 or 2 but you set {self.nspin=}')
+                DOS_arr *= 2
 
             if zero_at_fermi:
                 return E_arr - self.efermi, DOS_arr
