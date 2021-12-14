@@ -313,6 +313,7 @@ class Procar:
         self.efermi = None
         self.natoms = None
         self.norbs = proj_koeffs.shape[4]
+        self.orbital_names = orbital_names
 
     @staticmethod
     def from_file(filepath):
