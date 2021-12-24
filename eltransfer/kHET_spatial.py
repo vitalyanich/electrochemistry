@@ -20,8 +20,10 @@ class kHET:
     def __init__(self, working_folder=''):
         if working_folder == '':
             working_folder = '.'
+        # TODO think about better than get class objects for outcar and poscar info
         self.outcar = vasp.Outcar.from_file(working_folder + '/OUTCAR')
         self.poscar = vasp.Poscar.from_file(working_folder + '/POSCAR')
+        self.procar = Procar(working_folder + '/PROCAR')
         self.working_folder = working_folder
         self.path_to_data = working_folder + '/Saved_data'
         self.wavecar = None
@@ -50,7 +52,7 @@ class kHET:
         Overpotential (Volts). It shifts the electrode Fermi energy to -|e|*overpot
         :return:
         """
-        #TODO chack get_DOS parameters
+        #TODO check get_DOS parameters
         self.E, DOS = self.outcar.get_DOS(zero_at_fermi=True, smearing='Gaussian', sigma=0.1, dE = 0.01)
         self.T = T
         self.lambda_ = lambda_
@@ -66,7 +68,12 @@ class kHET:
             self.V_std = V_std
             self.C_EDL = C_EDL
             self.dE_Q = self._calculate_dE_Q()
-        self.kb_array = self._get_kb_array(threshold_value)
+        if shifted_DOS == 'all':
+            self.are_frozen_states = False
+            self.kb_array = self._get_kb_array(threshold_value)
+        else:
+            self.are_frozen_states = True
+            self.kb_array = self._get_kb_array(threshold_value, shifted_DOS)
         if self.kb_array == []:
             print('Error! kb_array is empty. Try to decrease threshold_value')
 
@@ -77,24 +84,76 @@ class kHET:
         #TODO make it
         pass
 
-    def _get_kb_array(self, threshold_value):
-        fermi_distribution = GM.fermi_func(self.E - self.dE_Q, self.T)
-        W_ox = GM.W_ox(self.E - self.dE_Q - self.overpot, self.T, self.lambda_)
-        E_satisfy_mask = W_ox * fermi_distribution > np.max(W_ox) * np.max(fermi_distribution) * threshold_value
-        list_of_E_indices = [i for i, E in enumerate(E_satisfy_mask) if E]
-        min_E_ind = min(list_of_E_indices)
-        max_E_ind = max(list_of_E_indices)
-        Erange = [self.E[min_E_ind], self.E[max_E_ind]]
+    def _get_atom_localization(self, kpoint, band, target_atom_types):
+        for key in self.procar.data.keys():
+            procar_data = self.procar.data[key]
+        list_of_ions = []
+        atomnames = self.poscar.structure.species
+        orbital_names = self.procar.orbitals
+        for i, name in enumerate(atomnames):
+            if name in target_atom_types:
+                    list_of_ions.append(i)
+        list_of_orbitals = [i for i in range(len(orbital_names))]
 
-        kb_array = []
-        for band in range(1, self.outcar.nbands + 1):
-            for kpoint in range(1, self.outcar.nkpts + 1):
-                energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                if energy >= Erange[0] and energy < Erange[1]:
-                    kb_array.append([kpoint, band])
+        localization = 0
+        for ion in list_of_ions:
+            for orb in list_of_orbitals:
+                    localization += procar_data[kpoint - 1][band - 1][ion][orb]
+        return localization
+
+    def _get_kb_array(self, threshold_value, shifted_DOS='all', threshold_for_localization_to_be_shifted=0.4):
+        if shifted_DOS=='all':
+            fermi_distribution = GM.fermi_func(self.E - self.dE_Q, self.T)
+            W_ox = GM.W_ox(self.E - self.dE_Q - self.overpot, self.T, self.lambda_)
+            E_satisfy_mask = W_ox * fermi_distribution > np.max(W_ox) * np.max(fermi_distribution) * threshold_value
+            list_of_E_indices = [i for i, E in enumerate(E_satisfy_mask) if E]
+            min_E_ind = min(list_of_E_indices)
+            max_E_ind = max(list_of_E_indices)
+            Erange = [self.E[min_E_ind], self.E[max_E_ind]]
+
+            kb_array = []
+            for band in range(1, self.outcar.nbands + 1):
+                for kpoint in range(1, self.outcar.nkpts + 1):
+                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                    if energy >= Erange[0] and energy < Erange[1]:
+                        kb_array.append([kpoint, band])
+        else:
+            fermi_distribution_shifted = GM.fermi_func(self.E - self.dE_Q, self.T)
+            W_ox_shifted = GM.W_ox(self.E - self.dE_Q - self.overpot, self.T, self.lambda_)
+            E_satisfy_mask_shifted = W_ox_shifted * fermi_distribution_shifted > np.max(W_ox_shifted) * np.max(
+                fermi_distribution_shifted) * threshold_value
+            list_of_E_indices_shifted = [i for i, E in enumerate(E_satisfy_mask_shifted) if E]
+            min_E_ind_shifted = min(list_of_E_indices_shifted)
+            max_E_ind_shifted = max(list_of_E_indices_shifted)
+            Erange_shifted = [self.E[min_E_ind_shifted], self.E[max_E_ind_shifted]]
+
+            fermi_distribution_frozen = GM.fermi_func(self.E - 0, self.T)
+            W_ox_frozen = GM.W_ox(self.E - 0 - self.overpot, self.T, self.lambda_)
+            E_satisfy_mask_frozen = W_ox_frozen * fermi_distribution_frozen > np.max(W_ox_frozen) * np.max(
+                fermi_distribution_frozen) * threshold_value
+            list_of_E_indices_frozen = [i for i, E in enumerate(E_satisfy_mask_frozen) if E]
+            min_E_ind_frozen = min(list_of_E_indices_frozen)
+            max_E_ind_frozen = max(list_of_E_indices_frozen)
+            Erange_frozen = [self.E[min_E_ind_frozen], self.E[max_E_ind_frozen]]
+
+            kb_array = []
+            self.frozen_mask = []
+            for band in range(1, self.outcar.nbands + 1):
+                for kpoint in range(1, self.outcar.nkpts + 1):
+                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                    if energy >= Erange_frozen[0] and energy < Erange_frozen[1]:
+                        if self._get_atom_localization(kpoint, band,
+                                                       target_atom_types=shifted_DOS) < threshold_for_localization_to_be_shifted:
+                            kb_array.append([kpoint, band])
+                            self.frozen_mask.append(1)
+                    if energy >= Erange_shifted[0] and energy < Erange_shifted[1]:
+                        if self._get_atom_localization(kpoint, band,
+                                                       target_atom_types=shifted_DOS) >= threshold_for_localization_to_be_shifted:
+                            kb_array.append([kpoint, band])
+                            self.frozen_mask.append(0)
         return kb_array
 
-    def calculate_kHET_spatial(self, tip_type='s', z_pos=None, from_center=False, cutoff_in_Angstroms=5, all_z=False, dim='2D'):
+    def calculate_kHET_spatial(self, tip_type='s', z_pos=None, from_center=False, cutoff_in_Angstroms=5, all_z=False, dim='2D', shifted_separately=False):
         xlen, ylen, zlen = np.shape(self.wavecar.wavefunctions[0])
 
         if dim == '2D':
@@ -132,6 +191,7 @@ class kHET:
                           "if you don't care about efficiency")
                     zmin = 0
                     zmax = zlen
+
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
                     energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
@@ -171,34 +231,83 @@ class kHET:
             k_HET_ = np.zeros((xlen, ylen, zlen))
 
             if tip_type == 's':
-                for i, kb in enumerate(self.wavecar.kb_array):
-                    kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                    weight = self.outcar.weights[kpoint - 1]
-                    f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
-                    w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
-                    matrix_elements_squared = np.abs(self.wavecar.wavefunctions[i]) ** 2
-                    k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
+                if self.are_frozen_states:
+                    if shifted_separately:
+                        k_HET_shifted = np.zeros((xlen, ylen, zlen))
+                    for i, kb in enumerate(self.wavecar.kb_array):
+                        kpoint, band = kb[0], kb[1]
+                        energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                        weight = self.outcar.weights[kpoint - 1]
+                        if self.frozen_mask[i] == 1:
+                            f_fermi = GM.fermi_func(energy, self.T)
+                            w_redox = GM.W_ox(energy - self.overpot, self.T, self.lambda_)
+                            matrix_elements_squared = np.abs(self.wavecar.wavefunctions[i]) ** 2
+                            k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
+                        else:
+                            f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
+                            w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
+                            matrix_elements_squared = np.abs(self.wavecar.wavefunctions[i]) ** 2
+                            k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
+                            try:
+                                k_HET_shifted += matrix_elements_squared * f_fermi * w_redox * weight
+                            except:
+                                pass
+                else:
+                    for i, kb in enumerate(self.wavecar.kb_array):
+                        kpoint, band = kb[0], kb[1]
+                        energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                        weight = self.outcar.weights[kpoint - 1]
+                        f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
+                        w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
+                        matrix_elements_squared = np.abs(self.wavecar.wavefunctions[i]) ** 2
+                        k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
 
             elif tip_type == 'pz':
-                for i, kb in enumerate(self.wavecar.kb_array):
-                    kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                    weight = self.outcar.weights[kpoint - 1]
-                    f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
-                    w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
-                    wf_grad_z = np.gradient(self.wavecar.wavefunctions[i], axis=2)
-                    matrix_elements_squared = np.abs(wf_grad_z) ** 2
-                    k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
+                if self.are_frozen_states:
+                    if shifted_separately:
+                        k_HET_shifted = np.zeros((xlen, ylen, zlen))
+                    for i, kb in enumerate(self.wavecar.kb_array):
+                        kpoint, band = kb[0], kb[1]
+                        energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                        weight = self.outcar.weights[kpoint - 1]
+                        if self.frozen_mask[i] == 1:
+                            f_fermi = GM.fermi_func(energy, self.T)
+                            w_redox = GM.W_ox(energy - self.overpot, self.T, self.lambda_)
+                            wf_grad_z = np.gradient(self.wavecar.wavefunctions[i], axis=2)
+                            matrix_elements_squared = np.abs(wf_grad_z) ** 2
+                            k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
+                        else:
+                            f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
+                            w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
+                            wf_grad_z = np.gradient(self.wavecar.wavefunctions[i], axis=2)
+                            matrix_elements_squared = np.abs(wf_grad_z) ** 2
+                            k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
+                            try:
+                                k_HET_shifted += matrix_elements_squared * f_fermi * w_redox * weight
+                            except:
+                                pass
+                else:
+                    for i, kb in enumerate(self.wavecar.kb_array):
+                        kpoint, band = kb[0], kb[1]
+                        energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                        weight = self.outcar.weights[kpoint - 1]
+                        f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
+                        w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
+                        wf_grad_z = np.gradient(self.wavecar.wavefunctions[i], axis=2)
+                        matrix_elements_squared = np.abs(wf_grad_z) ** 2
+                        k_HET_ += matrix_elements_squared * f_fermi * w_redox * weight
 
         else:
             raise ValueError("dim should be 3D or 2D")
 
         # TODO: check THIS below
         #k_HET_ *= 2 * np.pi / constants.PLANCK_CONSTANT
-        return k_HET_
+        if shifted_separately:
+            return k_HET_, k_HET_shifted
+        else:
+            return k_HET_
 
-    def plot_2D(self, func, show=True, save=False, filename='fig.png'):
+    def plot_2D(self, func, show=True, save=False, filename='fig.png', method='linear', logscale=None):
         """
         Function for plotting 2D images
         """
@@ -217,13 +326,19 @@ class kHET:
         Z = func.transpose().flatten()
         xi = np.linspace(X.min(), X.max(), 1000)
         yi = np.linspace(Y.min(), Y.max(), 1000)
-        zi = griddata((X, Y), Z, (xi[None, :], yi[:, None]), method='cubic')
-        plt.contourf(xi, yi, zi, 500, cmap=plt.cm.rainbow)
+        zi = griddata((X, Y), Z, (xi[None, :], yi[:, None]), method=method)
+        if logscale == None:
+            plt.contourf(xi, yi, zi, 500, cmap=plt.cm.rainbow)
+        else:
+            zi = np.log10(zi)
+            min, max, step = logscale
+            levels = np.arange(min, max, step)
+            plt.contourf(xi, yi, zi, 500, cmap=plt.cm.rainbow, levels=levels)
         ax = plt.gca()
         ax.set_aspect('equal')
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="7%", pad=0.1)
-        plt.colorbar(cax=cax)
+        cbar = plt.colorbar(cax=cax)
         if show == True:
             plt.show()
         if save == True:
