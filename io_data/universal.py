@@ -1,10 +1,17 @@
 import numpy as np
 from ..core.constants import ElemNum2Name, ElemName2Num, Bohr2Angstrom, Angstrom2Bohr
 from ..core.structure import Structure
+import warnings
 
 
 class Cube:
-    def __init__(self, data, structure, origin, comment=None, charges=None, dset_ids=None):
+    def __init__(self,
+                 data: np.ndarray,
+                 structure: Structure,
+                 origin: np.ndarray,
+                 comment: str = None,
+                 charges=None,
+                 dset_ids=None):
         self.volumetric_data = data
         self.structure = structure
         self.origin = origin
@@ -26,6 +33,30 @@ class Cube:
         return f'{self.comment}\n' + f'NX: {shape[0]}\nNY: {shape[1]}\nNZ: {shape[2]}\n' + \
                f'Origin:\n{self.origin[0]:.5f}  {self.origin[1]:.5f}  {self.origin[2]:.5f}\n' + \
                repr(self.structure)
+
+    def __add__(self, other):
+        assert isinstance(other, Cube), 'Other object must belong to Cube class'
+        assert self.origin == other.origin, 'Two Cube instances must have the same origin'
+        assert self.volumetric_data.shape == other.volumetric_data.shape, 'Two Cube instances must have ' \
+                                                                          'the same shape of volumetric_data'
+        if self.structure != other.structure:
+            warnings.warn('Two Cube instances have different structures. '
+                          'The structure will be taken from the 1st (self) instance. '
+                          'Hope you know, what you are doing')
+
+        return Cube(self.volumetric_data + other.volumetric_data, self.structure, self.origin)
+
+    def __sub__(self, other):
+        assert isinstance(other, Cube), 'Other object must belong to Cube class'
+        assert self.origin == other.origin, 'Two Cube instances must have the same origin'
+        assert self.volumetric_data.shape == other.volumetric_data.shape, 'Two Cube instances must have ' \
+                                                                          'the same shape of volumetric_data'
+        if self.structure != other.structure:
+            warnings.warn('Two Cube instances have different structures. '
+                          'The structure will be taken from the 1st (self) instance. '
+                          'Hope you know, what you are doing')
+
+        return Cube(self.volumetric_data - other.volumetric_data, self.structure, self.origin)
 
     @staticmethod
     def from_file(filepath):

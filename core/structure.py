@@ -15,7 +15,7 @@ class Structure:
     def __init__(self,
                  lattice: Union[List, np.ndarray],
                  species: Union[List[str], np.ndarray],
-                 coords: Sequence[Sequence[float]],
+                 coords: Union[Sequence[Sequence[float]], np.ndarray],
                  coords_are_cartesian: bool = True):
 
         if len(species) != len(coords):
@@ -71,6 +71,11 @@ class Structure:
                 lines.append('  '.join([f'{c:{width}.5f}' for c in coord]))
 
         return '\n'.join(lines)
+
+    def __eq__(self, other):
+        assert isinstance(other, Structure), 'Other object must belong to Structure class'
+        return np.array_equal(self.lattice, other.lattice) and (self.species == other.species) and \
+               np.array_equal(self.coords, other.coords) and (self.coords_are_cartesian == other.coords_are_cartesian)
 
     @property
     def natoms(self) -> int:

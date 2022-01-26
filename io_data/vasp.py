@@ -3,8 +3,12 @@ from typing import Union, List, Iterable
 from monty.re import regrep
 from ..core.structure import Structure
 from ..io_data.universal import Cube
-from ..core.EBS import EBS
+from ..core.electronic_structure import EBS
+from ..core.ionic_dynamics import IonicDynamics
+from ..core.constants import Angstrom2Bohr
+from . import jdftx
 from pymatgen.io.vasp import Procar as Procar_pmg
+import warnings
 
 
 class Poscar:
@@ -12,7 +16,7 @@ class Poscar:
     def __init__(self,
                  structure: Structure,
                  comment: str = None,
-                 sdynamics_data=None):
+                 sdynamics_data: Union[list, np.ndarray] = None):
         """
         Create an Poscar instance
         Args:
@@ -130,7 +134,15 @@ class Poscar:
 
         file.close()
 
-    def add_atoms(self, coords, species, sdynamics_data=None):
+    def convert(self, format):
+        if format == 'jdftx':
+            self.mod_coords_to_cartesian()
+            return jdftx.Ionpos(self.structure.species, self.structure.coords * Angstrom2Bohr), \
+                   jdftx.Lattice(np.transpose(self.structure.lattice) * Angstrom2Bohr)
+        else:
+            raise ValueError('Only format = jdftx is supported')
+
+    def mod_add_atoms(self, coords, species, sdynamics_data=None):
         self.structure.mod_add_atoms(coords, species)
         if sdynamics_data is not None:
             if any(isinstance(el, list) for el in sdynamics_data):
@@ -139,10 +151,10 @@ class Poscar:
             else:
                 self.sdynamics_data.append(sdynamics_data)
 
-    def change_atoms(self, ids: Union[int, Iterable],
-                     new_coords: Union[Iterable[float], Iterable[Iterable[float]]] = None,
-                     new_species: Union[str, List[str]] = None,
-                     new_sdynamics_data: Union[Iterable[str], Iterable[Iterable[str]]] = None):
+    def mod_change_atoms(self, ids: Union[int, Iterable],
+                         new_coords: Union[Iterable[float], Iterable[Iterable[float]]] = None,
+                         new_species: Union[str, List[str]] = None,
+                         new_sdynamics_data: Union[Iterable[str], Iterable[Iterable[str]]] = None):
         self.structure.mod_change_atoms(ids, new_coords, new_species)
         if new_sdynamics_data is not None:
             if self.sdynamics_data is None:
@@ -153,45 +165,68 @@ class Poscar:
             else:
                 self.sdynamics_data[ids] = new_sdynamics_data
 
-    def coords_to_cartesian(self):
-        if self.structure.coords_are_cartesian is True:
-            return 'Coords are already cartesian'
-        else:
-            self.structure.coords = np.matmul(self.structure.coords, self.structure.lattice)
-            self.structure.coords_are_cartesian = True
+    def mod_coords_to_box(self):
+        assert self.structure.coords_are_cartesian is False, 'This operation allowed only for NON-cartesian coords'
+        self.structure.coords %= 1
 
-    def coords_to_direct(self):
-        if self.structure.coords_are_cartesian is False:
-            return 'Coords are alresdy direct'
-        else:
-            transform = np.linalg.inv(self.structure.lattice)
-            self.structure.coords = np.matmul(self.structure.coords, transform)
-            self.structure.coords_are_cartesian = False
+    def mod_coords_to_direct(self):
+        self.structure.mod_coords_to_direct()
 
-    def convert(self, frmt):
-        pass
+    def mod_coords_to_cartesian(self):
+        self.structure.mod_coords_to_cartesian()
 
 
-class Outcar(EBS):
+class Outcar(EBS, IonicDynamics):
     """Class that reads VASP OUTCAR files"""
 
     def __init__(self, weights: np.ndarray,
-                 efermi_hist: np.ndarray = None,
-                 eigenvalues_hist: np.ndarray = None,
-                 occupations_hist: np.ndarray = None,
-                 energy_hist: np.ndarray = None,
-                 energy_ionic_hist: np.ndarray = None,
-                 forces_hist: np.ndarray = None):
-        self.weights = weights
-        self.forces_hist = forces_hist
+                 efermi_hist: np.ndarray,
+                 eigenvalues_hist: np.ndarray,
+                 occupations_hist: np.ndarray,
+                 energy_hist: np.ndarray,
+                 energy_ionic_hist: np.ndarray,
+                 forces_hist: np.ndarray):
+        EBS.__init__(self, eigenvalues_hist[-1], occupations_hist[-1], weights, efermi_hist[-1])
+        IonicDynamics.__init__(self, forces_hist)
+
         self.efermi_hist = efermi_hist
         self.energy_hist = energy_hist
         self.energy_ionic_hist = energy_ionic_hist
-
-        self.eigenvalues = eigenvalues_hist[-1]
-        self.occupations = occupations_hist[-1]
         self.eigenvalues_hist = eigenvalues_hist
         self.occupations_hist = occupations_hist
+
+    def __add__(self, other):
+        """
+        Concatenates Outcar files (all histories). It is useful for ionic optimization.
+        If k-point meshes from two Outcars are different, weights, eigenvalues and occupations will be taken
+        from the 2nd (other) Outcar instance
+        Args:
+            other (Outcar class): Outcar that should be added to the current Outcar
+
+        Returns (Outcar class):
+            New Outcar with concatenated histories
+        """
+        assert isinstance(other, Outcar), 'Other object must belong to Outcar class'
+        assert self.natoms == other.natoms, 'Number of atoms of two files must be equal'
+        if not np.array_equal(self.weights, other.weights):
+            warnings.warn('Two Outcar instances have been calculated with different k-point folding. '
+                          'Weights, eigenvalues and occupations will be taken from the 2nd (other) instance. '
+                          'Hope you know, what you are doing')
+            return Outcar(other.weights,
+                          np.concatenate((self.efermi_hist, other.efermi_hist)),
+                          other.eigenvalues_hist,
+                          other.occupations_hist,
+                          np.concatenate((self.energy_hist, other.energy_hist)),
+                          np.concatenate((self.energy_ionic_hist, other.energy_ionic_hist)),
+                          np.concatenate((self.forces_hist, other.forces_hist)))
+
+        return Outcar(other.weights,
+                      np.concatenate((self.efermi_hist, other.efermi_hist)),
+                      np.concatenate((self.eigenvalues_hist, other.eigenvalues_hist)),
+                      np.concatenate((self.occupations_hist, other.occupations_hist)),
+                      np.concatenate((self.energy_hist, other.energy_hist)),
+                      np.concatenate((self.energy_ionic_hist, other.energy_ionic_hist)),
+                      np.concatenate((self.forces_hist, other.forces_hist)))
 
     @property
     def natoms(self):
@@ -199,15 +234,11 @@ class Outcar(EBS):
 
     @property
     def nisteps(self):
-        return self.eigenvalues_hist.shape[0]
+        return self.energy_ionic_hist.shape[0]
 
     @property
     def forces(self):
         return self.forces_hist[-1]
-
-    @property
-    def efermi(self):
-        return self.efermi_hist[-1]
 
     @property
     def energy(self):
@@ -410,6 +441,9 @@ class Chgcar:
         read_data = False
 
         with open(filepath, 'r') as file:
+            for i in range(8 + structure.natoms):
+                file.readline()
+
             for line in file:
                 line_data = line.strip().split()
                 if read_data:
@@ -451,8 +485,7 @@ class Chgcar:
             return Cube(self.structure, comment + '  Charge Density\n', np.array(list(self.charge_density.shape)),
                         np.zeros(self.structure.natoms), self.charge_density)
         elif volumetric_data == 'spin_density':
-            return Cube(self.structure, comment + '  Spin Density\n', np.array(list(self.spin_density.shape)),
-                        np.zeros(self.structure.natoms), self.spin_density)
+            return Cube(self.spin_density, self.structure, np.zeros(3), comment + '  Spin Density\n')
         elif volumetric_data == 'spin_major':
             return Cube(self.structure, comment + '  Major Spin\n', np.array(list(self.spin_density.shape)),
                         np.zeros(self.structure.natoms), (self.charge_density + self.spin_density) / 2)
@@ -494,7 +527,7 @@ class Xdatcar:
             New Xdatcar with concatenated trajectory
         """
         assert isinstance(other, Xdatcar), 'Other object must belong to Xdatcar class'
-        assert np.array_equal(self.structure.lattice, other.structure.lattice), 'Lattices of two files mist be equal'
+        assert np.array_equal(self.structure.lattice, other.structure.lattice), 'Lattices of two files must be equal'
         assert self.structure.species == other.structure.species, 'Species in two files must be identical'
         assert self.structure.coords_are_cartesian == other.structure.coords_are_cartesian, \
             'Coords must be in the same coordinate system'

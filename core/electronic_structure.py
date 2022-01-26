@@ -3,11 +3,11 @@ from typing import Union, Iterable
 
 
 class EBS:
-    def __init__(self):
-        self.eigenvalues = None
-        self.occupations = None
-        self.weights = None
-        self.efermi = None
+    def __init__(self, eigenvalues, occupations, weights, efermi):
+        self.eigenvalues = eigenvalues
+        self.occupations = occupations
+        self.weights = weights
+        self.efermi = efermi
 
     @property
     def nbands(self):
