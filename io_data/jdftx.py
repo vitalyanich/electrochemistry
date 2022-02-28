@@ -5,12 +5,59 @@ from ..core.constants import Bohr2Angstrom, Hartree2eV, eV2Hartree
 from ..core.ionic_dynamics import IonicDynamics
 from . import vasp
 from .universal import Cube
-from typing import Union
+from typing import Union, List
+import warnings
+
+
+class Lattice:
+    def __init__(self,
+                 lattice: np.ndarray):
+        self.lattice = lattice
+
+    @staticmethod
+    def from_file(filepath: str):
+        file = open(filepath, 'r')
+        data = file.readlines()
+        file.close()
+
+        patterns = {'lattice': r'^\s*lattice\s+'}
+        matches = regrep(filepath, patterns)
+
+        lattice = []
+        i = 0
+        while len(lattice) < 9:
+            line = data[matches['lattice'][0][1] + i].split()
+            for word in line:
+                try:
+                    word = float(word)
+                    lattice.append(word)
+                except:
+                    pass
+            i += 1
+
+        lattice = np.array(lattice).reshape((3, 3))
+
+        return Lattice(lattice)
+
+    def to_file(self, filepath: str):
+        file = open(filepath, 'w')
+
+        file.write('lattice \\\n')
+        width_coords_float = max(len(str(int(np.max(self.lattice)))), len(str(int(np.min(self.lattice))))) + 16
+        for i, vector in enumerate(self.lattice):
+            file.write('\t')
+            for vector_i in vector:
+                file.write(f'{vector_i:{width_coords_float}.15f}  ')
+            if i < 2:
+                file.write('\\')
+            file.write('\n')
+
+        file.close()
 
 
 class Ionpos:
     def __init__(self,
-                 species: list[str],
+                 species: List[str],
                  coords: np.ndarray,
                  move_scale: Union[list, np.ndarray] = None):
         self.species = species
@@ -60,51 +107,9 @@ class Ionpos:
             lattice = np.transpose(args[0].lattice) * Bohr2Angstrom
             return vasp.Poscar(Structure(lattice, self.species, self.coords * Bohr2Angstrom))
 
-
-class Lattice:
-    def __init__(self,
-                 lattice: np.ndarray):
-        self.lattice = lattice
-
-    @staticmethod
-    def from_file(filepath: str):
-        file = open(filepath, 'r')
-        data = file.readlines()
-        file.close()
-
-        patterns = {'lattice': r'^\s*lattice\s+'}
-        matches = regrep(filepath, patterns)
-
-        lattice = []
-        i = 0
-        while len(lattice) < 9:
-            line = data[matches['lattice'][0][1] + i].split()
-            for word in line:
-                try:
-                    word = float(word)
-                    lattice.append(word)
-                except:
-                    pass
-            i += 1
-
-        lattice = np.array(lattice).reshape((3, 3))
-
-        return Lattice(lattice)
-
-    def to_file(self, filepath: str):
-        file = open(filepath, 'w')
-
-        file.write('lattice \\\n')
-        width_coords_float = max(len(str(int(np.max(self.lattice)))), len(str(int(np.min(self.lattice))))) + 16
-        for i, vector in enumerate(self.lattice):
-            file.write('\t')
-            for vector_i in vector:
-                file.write(f'{vector_i:{width_coords_float}.15f}  ')
-            if i < 2:
-                file.write('\\')
-            file.write('\n')
-
-        file.close()
+    def get_structure(self,
+                      lattice: Lattice):
+        return Structure(lattice.lattice * Bohr2Angstrom, self.species, self.coords * Bohr2Angstrom)
 
 
 class Input:
@@ -153,17 +158,25 @@ class Output(IonicDynamics):
                  energy_ionic_hist: np.ndarray,
                  coords_hist: np.ndarray,
                  forces_hist: np.ndarray,
+                 nelec_hist: np.ndarray,
                  structure: Structure,
                  nbands: int,
-                 nkpts: int):
+                 nkpts: int,
+                 mu: float,
+                 HOMO: float,
+                 LUMO: float):
         super(Output, self).__init__(forces_hist)
         self.fft_box_size = fft_box_size
         self.energy_hist = energy_hist
         self.energy_ionic_hist = energy_ionic_hist
         self.coords_hist = coords_hist
+        self.nelec_hist = nelec_hist
         self.structure = structure
         self.nbands = nbands
         self.nkpts = nkpts
+        self.mu = mu
+        self.HOMO = HOMO
+        self.LUMO = LUMO
 
     @property
     def energy(self):
@@ -188,17 +201,25 @@ class Output(IonicDynamics):
                     'fft_box_size': r'Chosen fftbox size, S = \[(\s+\d+\s+\d+\s+\d+\s+)\]',
                     'lattice': r'---------- Initializing the Grid ----------',
                     'nbands': r'nBands:\s+(\d+)',
-                    'nkpts': r'Reduced to (\d+) k-points under symmetry'}
+                    'nkpts': r'Reduced to (\d+) k-points under symmetry',
+                    'nelec': r'nElectrons:\s+(\d+.\d+)',
+                    'mu': r'\s+mu\s+:\s+([-+]?\d*\.\d*)',
+                    'HOMO': r'\s+HOMO\s*:\s+([-+]?\d*\.\d*)',
+                    'LUMO': r'\s+LUMO\s*:\s+([-+]?\d*\.\d*)'}
 
         matches = regrep(filepath, patterns)
 
         energy_hist = np.array([float(i[0][0]) for i in matches['energy']])
         energy_ionic_hist = np.array([float(i[0][0]) for i in matches['energy_ionic']])
+        nelec_hist = np.array([float(i[0][0]) for i in matches['nelec']])
 
         nisteps = len(energy_ionic_hist)
         natoms = int(matches['natoms'][0][0][0])
         nbands = int(matches['nbands'][0][0][0])
         nkpts = int(matches['nkpts'][0][0][0])
+        mu = float(matches['mu'][0][0][0])
+        HOMO = float(matches['HOMO'][0][0][0])
+        LUMO = float(matches['LUMO'][0][0][0])
         fft_box_size = np.array([int(i) for i in matches['fft_box_size'][0][0][0].split()])
 
         lattice = np.zeros((3, 3))
@@ -230,7 +251,8 @@ class Output(IonicDynamics):
 
         structure = Structure(lattice, species, coords_hist[-1] * Bohr2Angstrom, coords_are_cartesian=True)
 
-        return Output(fft_box_size, energy_hist, energy_ionic_hist, coords_hist, forces_hist, structure, nbands, nkpts)
+        return Output(fft_box_size, energy_hist, energy_ionic_hist, coords_hist, forces_hist, nelec_hist,
+                      structure, nbands, nkpts, mu, HOMO, LUMO)
 
 
 class EBS_data:
@@ -296,12 +318,33 @@ class VolumetricData:
         self.data = data
         self.structure = structure
 
+    def __add__(self, other):
+        assert isinstance(other, VolumetricData), 'Other object must belong to VolumetricData class'
+        assert self.data.shape == other.data.shape, f'Shapes of two data arrays must be the same but they are ' \
+                                                    f'{self.data.shape} and {other.data.shape}'
+        if self.structure != other.structure:
+            warnings.warn('Two VolumetricData instances contain different Staructures. '
+                          'The Structure will be taken from the 2nd (other) instance. '
+                          'Hope you know, what you are doing')
+        return VolumetricData(self.data + other.data, other.structure)
+
+    def __sub__(self, other):
+        assert isinstance(other, VolumetricData), 'Other object must belong to VolumetricData class'
+        assert self.data.shape == other.data.shape, f'Shapes of two data arrays must be the same but they are ' \
+                                                    f'{self.data.shape} and {other.data.shape}'
+        if self.structure != other.structure:
+            warnings.warn('Two VolumetricData instances contain different Staructures. '
+                          'The Structure will be taken from the 2nd (other) instance. '
+                          'Hope you know, what you are doing')
+        return VolumetricData(self.data - other.data, other.structure)
+
     @staticmethod
     def from_file(filepath: str,
-                  output: Output):
+                  fft_box_size: np.ndarray,
+                  structure: Structure):
         data = np.fromfile(filepath, dtype=np.float64)
-        data = data.reshape(output.fft_box_size)
-        return VolumetricData(data, output.structure)
+        data = data.reshape(fft_box_size)
+        return VolumetricData(data, structure)
 
     def convert_to_cube(self):
         return Cube(self.data, self.structure, np.zeros(3))

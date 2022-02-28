@@ -210,19 +210,6 @@ class Structure:
         Returns:
             np.ndarray (NxNx3 dimensions) which is a distance matrix in Cartesian coordination system
         """
-        '''
-        Old version (only for parallelepiped cells)
-        if self.coords_are_cartesian is False:
-            assert StructureError('Now only cartesian coords are supported')
-        r1 = np.broadcast_to(self.coords.reshape((self.natoms, 1, 3)), (self.natoms, self.natoms, 3))
-        r2 = np.broadcast_to(self.coords.reshape((1, self.natoms, 3)), (self.natoms, self.natoms, 3))
-        R = r2 - r1
-        L = np.broadcast_to(np.linalg.norm(self._lattice, axis=1).reshape((1, 1, 3)), (self.natoms, self.natoms, 3))
-        R = (R + L / 2) % L - L / 2.
-        assert np.all(R >= -L / 2.) and np.all(R <= L / 2.)
-        return R
-        '''
-
         self.mod_coords_to_direct()
         r1 = np.broadcast_to(self.coords.reshape((self.natoms, 1, 3)), (self.natoms, self.natoms, 3))
         r2 = np.broadcast_to(self.coords.reshape((1, self.natoms, 3)), (self.natoms, self.natoms, 3))
