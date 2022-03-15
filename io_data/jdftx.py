@@ -154,8 +154,8 @@ class Input:
 class Output(IonicDynamics):
     def __init__(self,
                  fft_box_size: np.ndarray,
-                 energy_hist: np.ndarray,
-                 energy_ionic_hist: np.ndarray,
+                 #energy_hist: np.ndarray,
+                 energy_ionic_hist: dict,
                  coords_hist: np.ndarray,
                  forces_hist: np.ndarray,
                  nelec_hist: np.ndarray,
@@ -167,7 +167,7 @@ class Output(IonicDynamics):
                  LUMO: float):
         super(Output, self).__init__(forces_hist)
         self.fft_box_size = fft_box_size
-        self.energy_hist = energy_hist
+        #self.energy_hist = energy_hist
         self.energy_ionic_hist = energy_ionic_hist
         self.coords_hist = coords_hist
         self.nelec_hist = nelec_hist
@@ -180,11 +180,14 @@ class Output(IonicDynamics):
 
     @property
     def energy(self):
-        return self.energy_ionic_hist[-1]
+        if 'G' in self.energy_ionic_hist.keys():
+            return self.energy_ionic_hist['G'][-1]
+        else:
+            return self.energy_ionic_hist['F'][-1]
 
     @property
     def nisteps(self):
-        return len(self.energy_ionic_hist)
+        return len(self.energy_ionic_hist['F'])
 
     @staticmethod
     def from_file(filepath: str):
@@ -194,8 +197,8 @@ class Output(IonicDynamics):
         file.close()
 
         patterns = {'natoms': r'Initialized \d+ species with (\d+) total atoms.',
-                    'energy': r'ElecMinimize:\s+Iter:\s+\d+\s+\w:\s+([-+]?\d*\.\d*)',
-                    'energy_ionic': r'IonicMinimize: Iter:\s+\d+\s+\w:\s+([-+]?\d*\.\d*)',
+                    #'energy': r'ElecMinimize:\s+Iter:\s+\d+\s+\w:\s+([-+]?\d*\.\d*)',
+                    #'energy_ionic': r'IonicMinimize: Iter:\s+\d+\s+\w:\s+([-+]?\d*\.\d*)',
                     'coords': r'# Ionic positions in cartesian coordinates:',
                     'forces': r'# Forces in Cartesian coordinates:',
                     'fft_box_size': r'Chosen fftbox size, S = \[(\s+\d+\s+\d+\s+\d+\s+)\]',
@@ -205,15 +208,26 @@ class Output(IonicDynamics):
                     'nelec': r'nElectrons:\s+(\d+.\d+)',
                     'mu': r'\s+mu\s+:\s+([-+]?\d*\.\d*)',
                     'HOMO': r'\s+HOMO\s*:\s+([-+]?\d*\.\d*)',
-                    'LUMO': r'\s+LUMO\s*:\s+([-+]?\d*\.\d*)'}
+                    'LUMO': r'\s+LUMO\s*:\s+([-+]?\d*\.\d*)',
+                    'F': r'\s+F\s+=\s+([-+]?\d*\.\d*)',
+                    'muN': r'\s+muN\s+=\s+([-+]?\d*\.\d*)',
+                    'G': r'\s+G\s+=\s+([-+]?\d*\.\d*)'}
 
         matches = regrep(filepath, patterns)
 
-        energy_hist = np.array([float(i[0][0]) for i in matches['energy']])
-        energy_ionic_hist = np.array([float(i[0][0]) for i in matches['energy_ionic']])
+        #energy_hist = np.array([float(i[0][0]) for i in matches['energy']])
+        #energy_ionic_hist = np.array([float(i[0][0]) for i in matches['energy_ionic']])
+        energy_ionic_hist = {}
+        F = np.array([float(i[0][0]) for i in matches['F']])
+        energy_ionic_hist['F'] = F
+        if 'muN' in matches.keys():
+            energy_ionic_hist['muN'] = np.array([float(i[0][0]) for i in matches['muN']])
+        if 'G' in matches.keys():
+            energy_ionic_hist['G'] = np.array([float(i[0][0]) for i in matches['G']])
+
         nelec_hist = np.array([float(i[0][0]) for i in matches['nelec']])
 
-        nisteps = len(energy_ionic_hist)
+        #nisteps = len(energy_ionic_hist['F'])
         natoms = int(matches['natoms'][0][0][0])
         nbands = int(matches['nbands'][0][0][0])
         nkpts = int(matches['nkpts'][0][0][0])
@@ -228,8 +242,8 @@ class Output(IonicDynamics):
         lattice[2] = [float(i) for i in data[matches['lattice'][0][1] + 4].split()[1:4]]
         lattice = lattice.T * Bohr2Angstrom
 
-        coords_hist = np.zeros((nisteps, natoms, 3))
         line_numbers_coords = [int(i[1]) + 1 for i in matches['coords']]
+        coords_hist = np.zeros((len(line_numbers_coords), natoms, 3))
         species = []
         atom_number = 0
         while len(line := data[line_numbers_coords[0] + atom_number].split()) > 0:
@@ -241,8 +255,8 @@ class Output(IonicDynamics):
                 coords_hist[i, atom_number] = [float(line[2]), float(line[3]), float(line[4])]
                 atom_number += 1
 
-        forces_hist = np.zeros((nisteps, natoms, 3))
         line_numbers_forces = [int(i[1]) + 1 for i in matches['forces']]
+        forces_hist = np.zeros((len(line_numbers_forces), natoms, 3))
         for i, line_number in enumerate(line_numbers_forces):
             atom_number = 0
             while len(line := data[line_number + atom_number].split()) > 0:
@@ -251,7 +265,7 @@ class Output(IonicDynamics):
 
         structure = Structure(lattice, species, coords_hist[-1] * Bohr2Angstrom, coords_are_cartesian=True)
 
-        return Output(fft_box_size, energy_hist, energy_ionic_hist, coords_hist, forces_hist, nelec_hist,
+        return Output(fft_box_size, energy_ionic_hist, coords_hist, forces_hist, nelec_hist,
                       structure, nbands, nkpts, mu, HOMO, LUMO)
 
 

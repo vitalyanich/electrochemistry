@@ -111,7 +111,7 @@ class Cube:
 
             for atom in range(natoms):
                 line = file.readline().split()
-                species += ElemNum2Name[int(line[0])]
+                species += [ElemNum2Name[int(line[0])]]
                 charges[atom] = float(line[1])
                 coords[atom, :] = line[2:]
 
