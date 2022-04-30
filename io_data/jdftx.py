@@ -167,7 +167,6 @@ class Output(IonicDynamics):
                  LUMO: float):
         super(Output, self).__init__(forces_hist)
         self.fft_box_size = fft_box_size
-        #self.energy_hist = energy_hist
         self.energy_ionic_hist = energy_ionic_hist
         self.coords_hist = coords_hist
         self.nelec_hist = nelec_hist
@@ -197,16 +196,17 @@ class Output(IonicDynamics):
         file.close()
 
         patterns = {'natoms': r'Initialized \d+ species with (\d+) total atoms.',
-                    #'energy': r'ElecMinimize:\s+Iter:\s+\d+\s+\w:\s+([-+]?\d*\.\d*)',
-                    #'energy_ionic': r'IonicMinimize: Iter:\s+\d+\s+\w:\s+([-+]?\d*\.\d*)',
                     'coords': r'# Ionic positions in cartesian coordinates:',
                     'forces': r'# Forces in Cartesian coordinates:',
                     'fft_box_size': r'Chosen fftbox size, S = \[(\s+\d+\s+\d+\s+\d+\s+)\]',
                     'lattice': r'---------- Initializing the Grid ----------',
                     'nbands': r'nBands:\s+(\d+)',
                     'nkpts': r'Reduced to (\d+) k-points under symmetry',
+                    'nkpts_folded': r'Folded \d+ k-points by \d+x\d+x\d+ to (\d+) k-points.',
+                    'is_kpts_irreducable': r'No reducable k-points',
                     'nelec': r'nElectrons:\s+(\d+.\d+)',
                     'mu': r'\s+mu\s+:\s+([-+]?\d*\.\d*)',
+                    'mu_hist': r'mu:\s+([-+]?\d*\.\d*)',
                     'HOMO': r'\s+HOMO\s*:\s+([-+]?\d*\.\d*)',
                     'LUMO': r'\s+LUMO\s*:\s+([-+]?\d*\.\d*)',
                     'F': r'\s+F\s+=\s+([-+]?\d*\.\d*)',
@@ -215,8 +215,6 @@ class Output(IonicDynamics):
 
         matches = regrep(filepath, patterns)
 
-        #energy_hist = np.array([float(i[0][0]) for i in matches['energy']])
-        #energy_ionic_hist = np.array([float(i[0][0]) for i in matches['energy_ionic']])
         energy_ionic_hist = {}
         F = np.array([float(i[0][0]) for i in matches['F']])
         energy_ionic_hist['F'] = F
@@ -227,13 +225,24 @@ class Output(IonicDynamics):
 
         nelec_hist = np.array([float(i[0][0]) for i in matches['nelec']])
 
-        #nisteps = len(energy_ionic_hist['F'])
         natoms = int(matches['natoms'][0][0][0])
         nbands = int(matches['nbands'][0][0][0])
-        nkpts = int(matches['nkpts'][0][0][0])
-        mu = float(matches['mu'][0][0][0])
-        HOMO = float(matches['HOMO'][0][0][0])
-        LUMO = float(matches['LUMO'][0][0][0])
+        if bool(matches['is_kpts_irreducable']):
+            nkpts = int(matches['nkpts_folded'][0][0][0])
+        else:
+            nkpts = int(matches['nkpts'])
+        if bool(matches['mu']):
+            mu = float(matches['mu'][0][0][0])
+        else:
+            mu = float(matches['mu_hist'][-1][0][0])
+        if bool(matches['HOMO']):
+            HOMO = float(matches['HOMO'][0][0][0])
+        else:
+            HOMO = None
+        if bool(matches['LUMO']):
+            LUMO = float(matches['LUMO'][0][0][0])
+        else:
+            LUMO = None
         fft_box_size = np.array([int(i) for i in matches['fft_box_size'][0][0][0].split()])
 
         lattice = np.zeros((3, 3))
