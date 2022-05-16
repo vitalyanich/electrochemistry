@@ -154,7 +154,6 @@ class Input:
 class Output(IonicDynamics):
     def __init__(self,
                  fft_box_size: np.ndarray,
-                 #energy_hist: np.ndarray,
                  energy_ionic_hist: dict,
                  coords_hist: np.ndarray,
                  forces_hist: np.ndarray,
@@ -209,7 +208,7 @@ class Output(IonicDynamics):
                     'mu_hist': r'mu:\s+([-+]?\d*\.\d*)',
                     'HOMO': r'\s+HOMO\s*:\s+([-+]?\d*\.\d*)',
                     'LUMO': r'\s+LUMO\s*:\s+([-+]?\d*\.\d*)',
-                    'F': r'\s+F\s+=\s+([-+]?\d*\.\d*)',
+                    'F': r'^\s*F\s+=\s+([-+]?\d*\.\d*)',
                     'muN': r'\s+muN\s+=\s+([-+]?\d*\.\d*)',
                     'G': r'\s+G\s+=\s+([-+]?\d*\.\d*)'}
 
@@ -230,7 +229,7 @@ class Output(IonicDynamics):
         if bool(matches['is_kpts_irreducable']):
             nkpts = int(matches['nkpts_folded'][0][0][0])
         else:
-            nkpts = int(matches['nkpts'])
+            nkpts = int(matches['nkpts'][0][0][0])
         if bool(matches['mu']):
             mu = float(matches['mu'][0][0][0])
         else:

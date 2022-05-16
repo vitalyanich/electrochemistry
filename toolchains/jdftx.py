@@ -21,23 +21,19 @@ def analise_all(folder: str,
             class_instances.append(output)
             files_processed.append('Output')
             print(folder, output.nelec_hist[-1])
-            #files.remove(file)
             fft_box_size = output.fft_box_size
         elif file.endswith('.ionpos'):
             ionpos = jdftx.Ionpos.from_file(os.path.join(folder, file))
             class_instances.append(ionpos)
             files_processed.append('Ionpos')
-            #files.remove(file)
         elif file.endswith('.ionpos_start'):
             ionpos = jdftx.Ionpos.from_file(os.path.join(folder, file))
             class_instances.append(ionpos)
             files_processed.append('Ionpos_start')
-            #files.remove(file)
         elif file.endswith('.lattice'):
             lattice = jdftx.Lattice.from_file(os.path.join(folder, file))
             class_instances.append(lattice)
             files_processed.append('Lattice')
-            #files.remove(file)
 
     if 'output_fft.out' in files:
         files.remove('output_fft.out')

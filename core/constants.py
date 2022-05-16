@@ -13,10 +13,12 @@ ElemNum2Name = {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O
 
 ElemName2Num = {v: k for k, v in zip(ElemNum2Name.keys(), ElemNum2Name.values())}
 
-Bohr2Angstrom = 0.529177 #? TODO Check it, it is Angstrom to Bohr value
+Bohr2Angstrom = 0.529177
 Angstrom2Bohr = 1 / Bohr2Angstrom
 Hartree2eV = 27.2114
 eV2Hartree = 1 / Hartree2eV
+THz2eV = 4.136e-3
+eV2THz = 1 / THz2eV
 
 PLANCK_CONSTANT = 4.135667662e-15  # Planck's constant in eV*s
 BOLTZMANN_CONSTANT = 8.617333262145e-5  # Boltzmann's constant in eV/K
