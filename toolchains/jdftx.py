@@ -1,4 +1,6 @@
 from ..io_data import jdftx
+from ..io_data import vasp
+from ..core.constants import Bohr2Angstrom
 import os
 from monty.re import regrep
 import numpy as np
@@ -62,13 +64,21 @@ def analise_all(folder: str,
             class_instances.append(nbound)
             files_processed.append('nbound')
 
-    if 'Ionpos' in files_processed and 'Lattice' in files_processed:
-        poscar = class_instances[files_processed.index('Ionpos')].convert('vasp', class_instances[files_processed.index('Lattice')])
-        poscar.to_file(os.path.join(folder, 'CONTCAR'))
-
-    if 'Ionpos_start' in files_processed and 'Lattice' in files_processed:
-        poscar = class_instances[files_processed.index('Ionpos_start')].convert('vasp', class_instances[files_processed.index('Lattice')])
+    if 'Output' in files_processed:
+        poscar = class_instances[files_processed.index('Output')].get_poscar()
         poscar.to_file(os.path.join(folder, 'POSCAR'))
+        poscar = class_instances[files_processed.index('Output')].get_contcar()
+        poscar.to_file(os.path.join(folder, 'CONTCAR'))
+        poscar = class_instances[files_processed.index('Output')].get_xdatcar()
+        poscar.to_file(os.path.join(folder, 'XDATCAR'))
+
+    #if 'Ionpos' in files_processed and 'Lattice' in files_processed:
+    #    poscar = class_instances[files_processed.index('Ionpos')].convert('vasp', class_instances[files_processed.index('Lattice')])
+    #    poscar.to_file(os.path.join(folder, 'CONTCAR'))
+
+    #if 'Ionpos_start' in files_processed and 'Lattice' in files_processed:
+    #    poscar = class_instances[files_processed.index('Ionpos_start')].convert('vasp', class_instances[files_processed.index('Lattice')])
+    #    poscar.to_file(os.path.join(folder, 'POSCAR'))
 
     if 'n_up' in files_processed and 'n_dn' in files_processed:
         n = class_instances[files_processed.index('n_up')] + class_instances[files_processed.index('n_dn')]

@@ -617,6 +617,8 @@ class Xdatcar:
             file.write(f'  {vector[0]}  {vector[1]}  {vector[2]}\n')
 
         species = np.array(self.structure.species)
+        sorted_order = np.argsort(species)
+        sorted_trajectory = self.trajectory[:, sorted_order, :]
         unique, counts = np.unique(species, return_counts=True)
         line = '   '
         for u in unique:
@@ -630,7 +632,9 @@ class Xdatcar:
         for i in range(self.nsteps):
             file.write(f'Direct configuration=     {i + 1}\n')
             for j in range(self.structure.natoms):
-                file.write(f'  {self.trajectory[i, j, 0]}  {self.trajectory[i, j, 1]}  {self.trajectory[i, j, 2]}\n')
+                file.write(f'  {sorted_trajectory[i, j, 0]}  '
+                           f'{sorted_trajectory[i, j, 1]}  '
+                           f'{sorted_trajectory[i, j, 2]}\n')
 
         file.close()
 

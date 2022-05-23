@@ -7,6 +7,7 @@ from . import vasp
 from .universal import Cube
 from typing import Union, List
 import warnings
+import copy
 
 
 class Lattice:
@@ -275,6 +276,19 @@ class Output(IonicDynamics):
 
         return Output(fft_box_size, energy_ionic_hist, coords_hist, forces_hist, nelec_hist,
                       structure, nbands, nkpts, mu, HOMO, LUMO)
+
+    def get_xdatcar(self):
+        transform = np.linalg.inv(self.structure.lattice)
+        return vasp.Xdatcar(structure=self.structure,
+                            trajectory=np.matmul(self.coords_hist * Bohr2Angstrom, transform))
+
+    def get_poscar(self):
+        structure = copy.copy(self.structure)
+        structure.coords = self.coords_hist[0] * Bohr2Angstrom
+        return vasp.Poscar(structure=structure)
+
+    def get_contcar(self):
+        return vasp.Poscar(structure=self.structure)
 
 
 class EBS_data:
