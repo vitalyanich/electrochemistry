@@ -188,6 +188,10 @@ class Output(IonicDynamics):
     def nisteps(self):
         return len(self.energy_ionic_hist['F'])
 
+    @property
+    def nelec(self):
+        return self.nelec_hist[-1]
+
     @staticmethod
     def from_file(filepath: str):
         # \TODO Non-Cartesin coods case is not imptemented
