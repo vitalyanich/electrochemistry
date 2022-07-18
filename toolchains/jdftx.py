@@ -7,7 +7,7 @@ import numpy as np
 
 
 def analise_all(folder: str,
-                PZC_reference: dict = None):
+                nelec_PZC: float = None):
 
     files = [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
 
@@ -72,14 +72,6 @@ def analise_all(folder: str,
         poscar = class_instances[files_processed.index('Output')].get_xdatcar()
         poscar.to_file(os.path.join(folder, 'XDATCAR'))
 
-    #if 'Ionpos' in files_processed and 'Lattice' in files_processed:
-    #    poscar = class_instances[files_processed.index('Ionpos')].convert('vasp', class_instances[files_processed.index('Lattice')])
-    #    poscar.to_file(os.path.join(folder, 'CONTCAR'))
-
-    #if 'Ionpos_start' in files_processed and 'Lattice' in files_processed:
-    #    poscar = class_instances[files_processed.index('Ionpos_start')].convert('vasp', class_instances[files_processed.index('Lattice')])
-    #    poscar.to_file(os.path.join(folder, 'POSCAR'))
-
     if 'n_up' in files_processed and 'n_dn' in files_processed:
         n = class_instances[files_processed.index('n_up')] + class_instances[files_processed.index('n_dn')]
         n.to_file(os.path.join(folder, 'valence_density.cube'))
@@ -125,14 +117,7 @@ DDEC6
 50 36
 </number of core electrons>'''
 
-    if PZC_reference is not None:
-        #family = folder.split('_')
-        #substrate = family[0]
-        #adsorbate = family[1]
-
-
-        #nelec_PZC = PZC_reference[substrate.split('-')[0] + '_' + adsorbate]
-        nelec_PZC = PZC_reference
+    if nelec_PZC is not None:
         charge = - (class_instances[files_processed.index('Output')].nelec_hist[-1] - nelec_PZC)
 
         job_control = open(os.path.join(folder, 'job_control.txt'), 'w')
