@@ -8,7 +8,7 @@ class Thermal_properties:
     Class for calculation thermal properties based on the calculated phonons
 
     Args:
-        eigen_freq (np.ndarray [nkpts, nfreq]): The energies of phonon eigen-frequencies in eV
+        eigen_freq (np.ndarray [nkpts, nfreq]): The energies of phonon eigenfrequencies in eV
         weights (np.ndarray [nkpts, ], optional): weights of k-points. The sum of weights should be equal to 1
     """
     def __init__(self,
@@ -21,7 +21,7 @@ class Thermal_properties:
             self.weights = weights
 
         if np.sum(eigen_freq < 0) > 0:
-            warnings.warn('There is at least one imaginary frequency in defined eigenfrequencies. '
+            warnings.warn('\nThere is at least one imaginary frequency in given eigenfrequencies. '
                           'All imaginary frequencies will be dropped from any further calculations')
         self.eigen_freq = np.maximum(0, eigen_freq)
 
@@ -62,5 +62,6 @@ class Thermal_properties:
 
         """
         k_B = 8.617333262145e-5  # Boltzmann's constant in eV/K
-        second_term = - np.sum(self.weights * k_B * T * np.nan_to_num(np.log(1 - np.exp(- self.eigen_freq / (k_B * T))), neginf=0))
+        second_term = - np.sum(self.weights * k_B * T * np.nan_to_num(np.log(1 - np.exp(- self.eigen_freq / (k_B * T))),
+                                                                      neginf=0))
         return self.get_E_temp(T) + second_term

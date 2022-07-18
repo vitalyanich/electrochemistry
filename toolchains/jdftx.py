@@ -1,6 +1,4 @@
 from ..io_data import jdftx
-from ..io_data import vasp
-from ..core.constants import Bohr2Angstrom
 import os
 from monty.re import regrep
 import numpy as np
