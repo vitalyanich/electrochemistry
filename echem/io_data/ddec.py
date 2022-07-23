@@ -1,7 +1,7 @@
 from matplotlib import colors
 import numpy as np
 from monty.re import regrep
-from ..core.structure import Structure
+from echem.core.structure import Structure
 
 
 class AtomicNetCharges:

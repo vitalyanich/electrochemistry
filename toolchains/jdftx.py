@@ -1,4 +1,4 @@
-from ..io_data import jdftx
+from echem.io_data import jdftx
 import os
 from monty.re import regrep
 import numpy as np

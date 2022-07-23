@@ -1,6 +1,6 @@
 import numpy as np
-from ..core.constants import ElemNum2Name, ElemName2Num, Bohr2Angstrom, Angstrom2Bohr
-from ..core.structure import Structure
+from echem.core.constants import ElemNum2Name, ElemName2Num, Bohr2Angstrom, Angstrom2Bohr
+from echem.core.structure import Structure
 import warnings
 
 
@@ -54,7 +54,7 @@ class Cube:
         assert self.volumetric_data.shape == other.volumetric_data.shape, 'Two Cube instances must have ' \
                                                                           'the same shape of volumetric_data'
         if self.structure != other.structure:
-            warnings.warn('Two Cube instances have different structures. '
+            warnings.warn('\nTwo Cube instances have different structures. '
                           'The structure will be taken from the 1st (self) instance. '
                           'Hope you know, what you are doing')
 
@@ -138,8 +138,8 @@ class Cube:
                 dset_ids = np.array(dset_ids)
 
             if n_data != 1:
-                raise ValueError(f'The processing of cube files with more than 1 data values is not implemented.'
-                                 f' n_data = {n_data}')
+                raise NotImplemented(f'The processing of cube files with more than 1 data values is not implemented.'
+                                     f' n_data = {n_data}')
 
             data = np.zeros((NX, NY, NZ))
             indexes = np.arange(0, NX * NY * NZ)

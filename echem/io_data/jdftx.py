@@ -1,22 +1,29 @@
 import numpy as np
 from monty.re import regrep
-from ..core.structure import Structure
-from ..core.constants import Bohr2Angstrom, Hartree2eV, eV2Hartree
-from ..core.ionic_dynamics import IonicDynamics
-from . import vasp
-from .universal import Cube
-from typing import Union, List
+from echem.core.structure import Structure
+from echem.core.constants import Bohr2Angstrom, Hartree2eV, eV2Hartree
+from echem.core.ionic_dynamics import IonicDynamics
+from echem.core.electronic_structure import EBS
+from echem.io_data import vasp
+from echem.io_data.universal import Cube
+from typing import Union
+from pathlib import Path
 import warnings
 import copy
+from nptyping import NDArray, Shape, Number
 
 
 class Lattice:
     def __init__(self,
-                 lattice: np.ndarray):
+                 lattice: NDArray[Shape['3, 3'], Number]):
         self.lattice = lattice
 
     @staticmethod
-    def from_file(filepath: str):
+    def from_file(filepath: Union[str, Path]):
+
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
@@ -58,19 +65,22 @@ class Lattice:
 
 class Ionpos:
     def __init__(self,
-                 species: List[str],
-                 coords: np.ndarray,
-                 move_scale: Union[list, np.ndarray] = None):
+                 species: list[str],
+                 coords: NDArray[Shape['Natoms, 3'], Number],
+                 move_scale: Union[list, NDArray[Shape['Natoms'], Number]] = None):
         self.species = species
         self.coords = coords
         if move_scale is None:
             move_scale = np.ones(len(coords), dtype=int)
-        if isinstance(move_scale, list):
+        elif isinstance(move_scale, list):
             move_scale = np.array(move_scale, dtype=int)
         self.move_scale = move_scale
 
     @staticmethod
-    def from_file(filepath: str):
+    def from_file(filepath: Union[str, Path]):
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
@@ -90,7 +100,11 @@ class Ionpos:
 
         return Ionpos(species, coords, move_scale)
 
-    def to_file(self, filepath: str):
+    def to_file(self,
+                filepath: Union[str, Path]) -> None:
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
         file = open(filepath, 'w')
 
         width_species = max([len(sp) for sp in self.species])
@@ -103,13 +117,16 @@ class Ionpos:
 
         file.close()
 
-    def convert(self, format, *args):
+    def convert(self,
+                format: str, *args):
         if format == 'vasp':
             lattice = np.transpose(args[0].lattice) * Bohr2Angstrom
             return vasp.Poscar(Structure(lattice, self.species, self.coords * Bohr2Angstrom))
+        else:
+            raise NotImplemented('Currently only format=vasp is supported')
 
     def get_structure(self,
-                      lattice: Lattice):
+                      lattice: Lattice) -> Structure:
         return Structure(lattice.lattice * Bohr2Angstrom, self.species, self.coords * Bohr2Angstrom)
 
 
@@ -154,10 +171,10 @@ class Input:
 
 class Output(IonicDynamics):
     def __init__(self,
-                 fft_box_size: np.ndarray,
+                 fft_box_size: NDArray[Shape['3'], Number],
                  energy_ionic_hist: dict,
-                 coords_hist: np.ndarray,
-                 forces_hist: np.ndarray,
+                 coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
+                 forces_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  nelec_hist: np.ndarray,
                  structure: Structure,
                  nbands: int,
@@ -193,8 +210,12 @@ class Output(IonicDynamics):
         return self.nelec_hist[-1]
 
     @staticmethod
-    def from_file(filepath: str):
+    def from_file(filepath: Union[str, Path]):
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
         # \TODO Non-Cartesin coods case is not imptemented
+
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
@@ -298,8 +319,12 @@ class Output(IonicDynamics):
 class EBS_data:
 
     @staticmethod
-    def from_file(filepath: str,
-                  output: Output):
+    def from_file(filepath: Union[str, Path],
+                  output: Output) -> NDArray[Shape['Nspin, Nkpts, Nbands'], Number]:
+
+        if isinstance(filepath, Path):
+            filepath = Path(filepath)
+
         data = np.fromfile(filepath, dtype=np.float64)
         if len(data) % (output.nkpts * output.nbands) != 0:
             raise ValueError(
@@ -313,14 +338,18 @@ class EBS_data:
 
 class Eigenvals(EBS_data):
     def __init__(self,
-                 eigenvalues: np.ndarray,
+                 eigenvalues: NDArray[Shape['Nspin, Nkpts, Nbands'], Number],
                  units: str):
         self.eigenvalues = eigenvalues
         self.units = units
 
     @staticmethod
-    def from_file(filepath: str,
+    def from_file(filepath: Union[str, Path],
                   output: Output):
+
+        if isinstance(filepath, Path):
+            filepath = Path(filepath)
+
         eigenvalues = super(Eigenvals, Eigenvals).from_file(filepath, output)
         return Eigenvals(eigenvalues, 'Hartree')
 
@@ -345,8 +374,12 @@ class Fillings(EBS_data):
         self.occupations = occupations
 
     @staticmethod
-    def from_file(filepath: str,
+    def from_file(filepath: Union[str, Path],
                   output: Output):
+
+        if isinstance(filepath, Path):
+            filepath = Path(filepath)
+
         occupations = super(Fillings, Fillings).from_file(filepath, output)
         return Fillings(occupations)
 
@@ -379,23 +412,32 @@ class VolumetricData:
         return VolumetricData(self.data - other.data, other.structure)
 
     @staticmethod
-    def from_file(filepath: str,
-                  fft_box_size: np.ndarray,
+    def from_file(filepath: Union[str, Path],
+                  fft_box_size: NDArray[Shape['3'], Number],
                   structure: Structure):
+
+        if isinstance(filepath, Path):
+            filepath = Path(filepath)
+
         data = np.fromfile(filepath, dtype=np.float64)
         data = data.reshape(fft_box_size)
         return VolumetricData(data, structure)
 
-    def convert_to_cube(self):
+    def convert_to_cube(self) -> Cube:
         return Cube(self.data, self.structure, np.zeros(3))
 
 
 class kPts:
-    def __init__(self, weights):
+    def __init__(self,
+                 weights: NDArray[Shape['Nkpts'], Number]):
         self.weights = weights
 
     @staticmethod
-    def from_file(filepath):
+    def from_file(filepath: Union[str, Path]):
+
+        if isinstance(filepath, Path):
+            filepath = Path(filepath)
+
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
@@ -408,3 +450,207 @@ class kPts:
             weights.append(float(line.split()[6]))
         weights = np.array(weights)
         return kPts(weights)
+
+
+class BandProjections:
+    def __init__(self,
+                 proj_coeffs: NDArray[Shape['Nspin, Nkpts, Nbands, Norbs'], Number],
+                 weights: NDArray[Shape['Nkpts'], Number],
+                 species: list[str],
+                 norbs_per_atomtype: dict,
+                 orbs_names: list[str],
+                 orbs_data: list[dict]):
+        self.proj_coeffs = proj_coeffs
+        self.weights = weights
+        self.species = species
+        self.norbs_per_atomtype = norbs_per_atomtype
+        self.orbs_names = orbs_names
+        self.orbs_data = orbs_data
+
+        self.eigenvalues = None
+
+    @property
+    def nspin(self):
+        return self.proj_coeffs.shape[0]
+
+    @property
+    def nkpts(self):
+        return self.proj_coeffs.shape[1]
+
+    @property
+    def nbands(self):
+        return self.proj_coeffs.shape[3]
+
+    @property
+    def norbs(self):
+        return self.proj_coeffs.shape[4]
+
+    @staticmethod
+    def from_file(filepath: Union[str, Path]):
+
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
+        file = open(filepath, 'r')
+        data = file.readlines()
+        file.close()
+
+        patterns = {'x': r'#\s+\d+'}
+        matches = regrep(filepath, patterns)
+
+        nstates = int(data[0].split()[0])
+        nbands = int(data[0].split()[2])
+        norbs = int(data[0].split()[4])
+
+        if 'spin' in data[int(matches['x'][0][1])]:
+            nspin = 2
+        else:
+            nspin = 1
+
+        nkpts = int(nstates / nspin)
+
+        proj_coeffs = np.zeros((nspin, nkpts, nbands, norbs))
+        weights = np.zeros(nstates)
+
+        start_lines = []
+        for i, match in enumerate(matches['x']):
+            start_lines.append(int(match[1]))
+            weights[i] = float(data[int(match[1])].split()[7])
+
+        if not np.array_equal(weights[:len(weights) // 2], weights[len(weights) // 2:]):
+            raise ValueError(f'Kpts weights can not be correctly split {weights=}')
+
+        weights = weights[:len(weights) // 2]
+
+        species = []
+        norbs_per_atomtype = {}
+        orbs_names = []
+        orbs_data = []
+
+        idx_atom = -1
+        for iline in range(2, start_lines[0]):
+            line = data[iline].split()
+            atomtype = line[0]
+            natoms_per_atomtype = int(line[1])
+            species += [atomtype] * natoms_per_atomtype
+            norbs_per_atomtype[line[0]] = int(line[2])
+
+            l_max = int(line[3])
+            nshalls_per_l = []
+            for i in range(l_max + 1):
+                nshalls_per_l.append(int(line[4 + i]))
+
+            for i in range(natoms_per_atomtype):
+                idx_atom += 1
+                for l, n_max in zip(range(l_max + 1), nshalls_per_l):
+                    for n in range(n_max):
+                        if l == 0:
+                            orbs_names.append(f'{idx_atom} {atomtype} s {n + 1}({n_max})')
+                            orbs_data.append({'atom_type': atomtype,
+                                              'atom_index': idx_atom,
+                                              'l': l,
+                                              'm': 0,
+                                              'orb_name': 's'})
+                        elif l == 1:
+                            for m, m_name in zip([-1, 0, 1], ['p_x', 'p_y', 'p_z']):
+                                orbs_names.append(f'{idx_atom} {atomtype} {m_name} {n + 1}({n_max})')
+                                orbs_data.append({'atom_type': atomtype,
+                                                  'atom_index': idx_atom,
+                                                  'l': l,
+                                                  'm': m,
+                                                  'orb_name': m_name})
+                        elif l == 2:
+                            for m, m_name in zip([-2, -1, 0, 1, 2], ['d_xy', 'd_yz', 'd_z^2', 'd_xz', 'd_x^2-y^2']):
+                                orbs_names.append(f'{idx_atom} {atomtype} {m_name} {n + 1}({n_max})')
+                                orbs_data.append({'atom_type': atomtype,
+                                                  'atom_index': idx_atom,
+                                                  'l': l,
+                                                  'm': m,
+                                                  'orb_name': m_name})
+                        elif l > 2:
+                            raise NotImplementedError('Only s, p snd d orbitals are currently supported')
+
+        ikpt_major = -1
+        ikpt_minor = -1
+        for istate, (start, stop) in enumerate(zip(start_lines[:-1], start_lines[1:])):
+            if nspin == 2:
+                if data[start].split()[9] == '+1;':
+                    ispin = 0
+                    ikpt_major += 1
+                    ikpt = ikpt_major
+                elif data[start].split()[9] == '-1;':
+                    ispin = 1
+                    ikpt_minor += 1
+                    ikpt = ikpt_minor
+                else:
+                    raise ValueError(f'Can\'t determine spin in string {data[start].split()}')
+            else:
+                ispin = 0
+                ikpt = istate
+
+            for iband, line in enumerate(range(start + 1, stop)):
+                proj_coeffs[ispin, ikpt, iband] = [float(k) for k in data[line].split()]
+
+        return BandProjections(proj_coeffs, weights, species, norbs_per_atomtype, orbs_names, orbs_data)
+
+    def get_PDOS(self,
+                 atom_numbers: Union[list[int], int],
+                 eigenvals: Eigenvals,
+                 get_orbs_names: bool = False,
+                 specific_l: int = None,
+                 dE: float = 0.01,
+                 emin: float = None,
+                 emax: float = None,
+                 zero_at_fermi: bool = False,
+                 sigma: float = 0.02,
+                 efermi: float = None) -> Union[tuple[NDArray[Shape['Ngrid'], Number],
+                                                      NDArray[Shape['Nspin, Norbs_selected, Ngrid'], Number]],
+                                                tuple[NDArray[Shape['Ngrid'], Number],
+                                                      NDArray[Shape['Nspin, Norbs_selected, Ngrid'], Number],
+                                                      list[str]]]:
+        self.eigenvalues = eigenvals.eigenvalues
+        if isinstance(atom_numbers, int):
+            atom_numbers = [atom_numbers]
+
+        if zero_at_fermi is True and efermi is None:
+            raise ValueError('You can not set zero_at_fermi=True if you did not specify efermi value')
+
+        if emin is None:
+            E_min = np.min(self.eigenvalues) - 1
+        if emax is None:
+            E_max = np.max(self.eigenvalues) + 1
+
+        E_arr = np.arange(E_min, E_max, dE)
+        ngrid = E_arr.shape[0]
+
+        idxs = []
+        for atom in atom_numbers:
+            start = sum([self.norbs_per_atomtype[i] for i in self.species[:atom]])
+            for i in range(self.norbs_per_atomtype[self.species[atom]]):
+                idxs.append(start + i)
+
+        if specific_l is not None:
+            idxs = [idx for idx in idxs if self.orbs_data[idx]['l'] == specific_l]
+
+        proj_coeffs_weighted = self.proj_coeffs[:, :, :, idxs]
+
+        for spin in range(self.nspin):
+            for i, weight_kpt in enumerate(self.weights):
+                proj_coeffs_weighted[spin, i] *= weight_kpt
+
+        W_arr = np.moveaxis(proj_coeffs_weighted, [1, 2, 3], [2, 3, 1])
+        G_arr = EBS.gaussian_smearing(E_arr, self.eigenvalues, sigma)
+
+        PDOS_arr = np.zeros((self.nspin, len(idxs), ngrid))
+        for spin in range(self.nspin):
+            for idx in range(len(idxs)):
+                PDOS_arr[spin, idx] = np.sum(G_arr[spin, :, :, :] * W_arr[spin, idx, :, :, None],
+                                             axis=(0, 1))
+
+        if self.nspin == 1:
+            PDOS_arr *= 2
+
+        if get_orbs_names:
+            return E_arr, PDOS_arr, [self.orbs_names[i] for i in idxs]
+        else:
+            return E_arr, PDOS_arr

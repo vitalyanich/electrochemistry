@@ -159,7 +159,8 @@ class XyzTrajectory:
                 except:
                     break
                 line = file.readline()
-                energies_pot.append(float(line.split()[8].split('=')[1]))
+                energies_pot.append(float(line.split()[5]))
+                #energies_pot.append(float(line.split()[8].split('=')[1]))
 
                 coords = np.zeros((natoms, 3))
                 for i in range(natoms):

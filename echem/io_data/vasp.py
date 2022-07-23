@@ -1,11 +1,11 @@
 import numpy as np
 from typing import Union, List, Iterable
 from monty.re import regrep
-from ..core.structure import Structure
+from echem.core.structure import Structure
 from ..io_data.universal import Cube
-from ..core.electronic_structure import EBS
-from ..core.ionic_dynamics import IonicDynamics
-from ..core.constants import Angstrom2Bohr
+from echem.core.electronic_structure import EBS
+from echem.core.ionic_dynamics import IonicDynamics
+from echem.core.constants import Angstrom2Bohr
 from . import jdftx
 from pymatgen.io.vasp import Procar as Procar_pmg
 import warnings
@@ -322,7 +322,7 @@ class Wavecar:
 
     @staticmethod
     def from_file(filepath, kb_array, ngrid_factor=1.5):
-        from ..core.vaspwfc_p3 import vaspwfc
+        from echem.core.vaspwfc_p3 import vaspwfc
         wfc = vaspwfc(filepath)
         wavefunctions = []
         for kb in kb_array:
@@ -405,7 +405,7 @@ class Procar:
                 proj_coeffs_weighted[spin, i] *= weight_kpt
 
         W_arr = np.moveaxis(proj_coeffs_weighted, [2, 3, 4], [4, 2, 3])
-        G_arr = EBS.GaussianSmearing(E_arr, self.eigenvalues, sigma)
+        G_arr = EBS.gaussian_smearing(E_arr, self.eigenvalues, sigma)
 
         PDOS_arr = np.zeros((self.nspin, len(atom_numbers), self.norbs, ngrid))
         for spin in range(self.nspin):
