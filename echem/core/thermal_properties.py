@@ -23,7 +23,8 @@ class Thermal_properties:
 
         if np.sum(eigen_freq < 0) > 0:
             warnings.warn('\nThere is at least one imaginary frequency in given eigenfrequencies. '
-                          'All imaginary frequencies will be dropped from any further calculations')
+                          '\nAll imaginary frequencies will be dropped from any further calculations'
+                          f'\nImaginary frequencies: {eigen_freq[eigen_freq < 0]}')
         self.eigen_freq = np.maximum(0, eigen_freq)
 
     def get_E_zpe(self) -> float:
