@@ -125,6 +125,10 @@ class InterPhonInterface(Thermal_properties):
                 for file in files_to_copy:
                     shutil.copyfile(file, subfolder_to_disp / file.name)
 
+        with open(folder_to_disps / 'user_args_InterPhon', 'w') as file:
+            for key, value in user_args.items():
+                file.write(f'{key}: {value}\n')
+
     def _make_postprocess(self,
                           folder_to_disps: Path,
                           filepath_unitcell: Path,
