@@ -122,9 +122,10 @@ class Cube:
 
             structure = Structure(lattice, species, coords, coords_are_cartesian=True)
 
-            dset_ids = []
+            dset_ids = None
             dset_ids_processed = -1
             if dset_ids_flag is True:
+                dset_ids = []
                 line = file.readline().split()
                 n_data = int(line[0])
                 if n_data < 1:
