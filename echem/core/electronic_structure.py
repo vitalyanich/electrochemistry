@@ -21,9 +21,9 @@ class EBS:
         self.efermi = efermi
 
         if weights is None:
-            self.weight = np.ones(eigenvalues.shape[1]) / eigenvalues.shape[1]
+            self.weights = np.ones(eigenvalues.shape[1]) / eigenvalues.shape[1]
         else:
-            self.weight = weights
+            self.weights = weights
 
     @property
     def nspin(self):
