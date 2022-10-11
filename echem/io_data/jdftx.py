@@ -176,6 +176,7 @@ class Output(IonicDynamics):
                  coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  forces_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  nelec_hist: np.ndarray,
+                 magnetization_hist: NDArray[Shape['Nesteps, 2'], Number],
                  structure: Structure,
                  nbands: int,
                  nkpts: int,
@@ -187,6 +188,7 @@ class Output(IonicDynamics):
         self.energy_ionic_hist = energy_ionic_hist
         self.coords_hist = coords_hist
         self.nelec_hist = nelec_hist
+        self.magnetization_hist = magnetization_hist
         self.structure = structure
         self.nbands = nbands
         self.nkpts = nkpts
@@ -209,6 +211,14 @@ class Output(IonicDynamics):
     def nelec(self):
         return self.nelec_hist[-1]
 
+    @property
+    def get_magnetization_abs(self):
+        return self.magnetization_hist[-1, 0]
+
+    @property
+    def get_magnetization_tot(self):
+        return self.magnetization_hist[-1, 1]
+
     @staticmethod
     def from_file(filepath: Union[str, Path]):
         if isinstance(filepath, str):
@@ -230,6 +240,7 @@ class Output(IonicDynamics):
                     'nkpts_folded': r'Folded \d+ k-points by \d+x\d+x\d+ to (\d+) k-points.',
                     'is_kpts_irreducable': r'No reducable k-points',
                     'nelec': r'nElectrons:\s+(\d+.\d+)',
+                    'magnetization': r'magneticMoment:\s+\[\s+Abs:\s+(\d+.\d+)\s+Tot:\s+([-+]?\d*\.\d*)',
                     'mu': r'\s+mu\s+:\s+([-+]?\d*\.\d*)',
                     'mu_hist': r'mu:\s+([-+]?\d*\.\d*)',
                     'HOMO': r'\s+HOMO\s*:\s+([-+]?\d*\.\d*)',
@@ -268,6 +279,12 @@ class Output(IonicDynamics):
             LUMO = float(matches['LUMO'][0][0][0])
         else:
             LUMO = None
+        if bool(matches['magnetization']):
+            magnetization_hist = np.zeros((len(matches['magnetization']), 2))
+            for i, mag in enumerate(matches['magnetization']):
+                magnetization_hist[i] = [float(mag[0][0]), float(mag[0][1])]
+        else:
+            magnetization_hist = None
         fft_box_size = np.array([int(i) for i in matches['fft_box_size'][0][0][0].split()])
 
         lattice = np.zeros((3, 3))
@@ -299,7 +316,7 @@ class Output(IonicDynamics):
 
         structure = Structure(lattice, species, coords_hist[-1] * Bohr2Angstrom, coords_are_cartesian=True)
 
-        return Output(fft_box_size, energy_ionic_hist, coords_hist, forces_hist, nelec_hist,
+        return Output(fft_box_size, energy_ionic_hist, coords_hist, forces_hist, nelec_hist, magnetization_hist,
                       structure, nbands, nkpts, mu, HOMO, LUMO)
 
     def get_xdatcar(self):
