@@ -4,8 +4,11 @@ from .GerischerMarkus import GM
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from core import constants
-from io_data import vasp
+from ..core import constants
+from ..io_data.vasp import Outcar
+from ..io_data.vasp import Poscar
+from ..io_data.vasp import Wavecar
+from pymatgen.io.vasp import Procar
 
 
 class kHET:
@@ -21,8 +24,8 @@ class kHET:
         if working_folder == '':
             working_folder = '.'
         # TODO think about better than get class objects for outcar and poscar info
-        self.outcar = vasp.Outcar.from_file(working_folder + '/OUTCAR')
-        self.poscar = vasp.Poscar.from_file(working_folder + '/POSCAR')
+        self.outcar = Outcar.from_file(working_folder + '/OUTCAR')
+        self.poscar = Poscar.from_file(working_folder + '/POSCAR')
         self.procar = Procar(working_folder + '/PROCAR')
         self.working_folder = working_folder
         self.path_to_data = working_folder + '/Saved_data'
@@ -38,7 +41,7 @@ class kHET:
         self.kb_array = None
         self.E = None
 
-    def set_parameters(self, T, lambda_, overpot=0, V_std=None, C_EDL=None, dE_Q=None, linear_constant=26, threshold_value=1e-5):
+    def set_parameters(self, T, lambda_, overpot=0, V_std=None, C_EDL=None, dE_Q=None, linear_constant=26, threshold_value=1e-5, shifted_DOS='all'):
         """
         :param C_EDL: float
         Capacitance of electric double layer (microF/cm^2)
@@ -78,7 +81,7 @@ class kHET:
             print('Error! kb_array is empty. Try to decrease threshold_value')
 
     def load_wavecar(self):
-        self.wavecar = vasp.Wavecar.from_file(self.working_folder+'/WAVECAR', self.kb_array)
+        self.wavecar = Wavecar.from_file(self.working_folder+'/WAVECAR', self.kb_array)
 
     def plot_distributions(self):
         #TODO make it
@@ -114,7 +117,7 @@ class kHET:
             kb_array = []
             for band in range(1, self.outcar.nbands + 1):
                 for kpoint in range(1, self.outcar.nkpts + 1):
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                    energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
                     if energy >= Erange[0] and energy < Erange[1]:
                         kb_array.append([kpoint, band])
         else:
@@ -140,7 +143,7 @@ class kHET:
             self.frozen_mask = []
             for band in range(1, self.outcar.nbands + 1):
                 for kpoint in range(1, self.outcar.nkpts + 1):
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                    energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
                     if energy >= Erange_frozen[0] and energy < Erange_frozen[1]:
                         if self._get_atom_localization(kpoint, band,
                                                        target_atom_types=shifted_DOS) < threshold_for_localization_to_be_shifted:
@@ -194,8 +197,8 @@ class kHET:
 
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                    weight = self.outcar.weights[kpoint - 1]
+                    energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
+                    weight = self.outcar.weights[0][kpoint - 1]
                     f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                     w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                     overlap_integrals_squared = self._get_overlap_integrals_squared(self.wavecar.wavefunctions[i], cutoff,
@@ -207,8 +210,8 @@ class kHET:
             elif tip_type == 's':
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                    weight = self.outcar.weights[kpoint - 1]
+                    energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
+                    weight = self.outcar.weights[0][kpoint - 1]
                     f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                     w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                     matrix_elements_squared = np.abs(self.wavecar.wavefunctions[i][:, :, z]) ** 2
@@ -217,8 +220,8 @@ class kHET:
             elif tip_type == 'pz':
                 for i, kb in enumerate(self.wavecar.kb_array):
                     kpoint, band = kb[0], kb[1]
-                    energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                    weight = self.outcar.weights[kpoint - 1]
+                    energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
+                    weight = self.outcar.weights[0][kpoint - 1]
                     f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                     w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                     wf_grad_z = np.gradient(self.wavecar.wavefunctions[i], axis=2)
@@ -236,7 +239,7 @@ class kHET:
                         k_HET_shifted = np.zeros((xlen, ylen, zlen))
                     for i, kb in enumerate(self.wavecar.kb_array):
                         kpoint, band = kb[0], kb[1]
-                        energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
+                        energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
                         weight = self.outcar.weights[kpoint - 1]
                         if self.frozen_mask[i] == 1:
                             f_fermi = GM.fermi_func(energy, self.T)
@@ -255,8 +258,8 @@ class kHET:
                 else:
                     for i, kb in enumerate(self.wavecar.kb_array):
                         kpoint, band = kb[0], kb[1]
-                        energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                        weight = self.outcar.weights[kpoint - 1]
+                        energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
+                        weight = self.outcar.weights[0][kpoint - 1]
                         f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                         w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                         matrix_elements_squared = np.abs(self.wavecar.wavefunctions[i]) ** 2
@@ -268,8 +271,8 @@ class kHET:
                         k_HET_shifted = np.zeros((xlen, ylen, zlen))
                     for i, kb in enumerate(self.wavecar.kb_array):
                         kpoint, band = kb[0], kb[1]
-                        energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                        weight = self.outcar.weights[kpoint - 1]
+                        energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
+                        weight = self.outcar.weights[0][kpoint - 1]
                         if self.frozen_mask[i] == 1:
                             f_fermi = GM.fermi_func(energy, self.T)
                             w_redox = GM.W_ox(energy - self.overpot, self.T, self.lambda_)
@@ -289,8 +292,8 @@ class kHET:
                 else:
                     for i, kb in enumerate(self.wavecar.kb_array):
                         kpoint, band = kb[0], kb[1]
-                        energy = self.outcar.eigenvalues[kpoint - 1][band - 1] - self.outcar.efermi
-                        weight = self.outcar.weights[kpoint - 1]
+                        energy = self.outcar.eigenvalues[0][kpoint - 1][band - 1] - self.outcar.efermi
+                        weight = self.outcar.weights[0][kpoint - 1]
                         f_fermi = GM.fermi_func(energy - self.dE_Q, self.T)
                         w_redox = GM.W_ox(energy - self.dE_Q - self.overpot, self.T, self.lambda_)
                         wf_grad_z = np.gradient(self.wavecar.wavefunctions[i], axis=2)

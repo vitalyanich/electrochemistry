@@ -6,7 +6,7 @@ from ..io_data.universal import Cube
 from ..core.electronic_structure import EBS
 from ..core.ionic_dynamics import IonicDynamics
 from ..core.constants import Angstrom2Bohr
-from . import jdftx
+#from . import jdftx
 from pymatgen.io.vasp import Procar as Procar_pmg
 import warnings
 
@@ -482,16 +482,25 @@ class Chgcar:
     def convert_to_cube(self, volumetric_data='charge_density'):
         comment = '  Cube file was created using Electrochemistry package\n'
         if volumetric_data == 'charge_density':
-            return Cube(self.structure, comment + '  Charge Density\n', np.array(list(self.charge_density.shape)),
-                        np.zeros(self.structure.natoms), self.charge_density)
+            return Cube(data=self.charge_density,
+                        structure=self.structure,
+                        comment=comment+'  Charge Density\n',
+                        origin=np.zeros(3))
         elif volumetric_data == 'spin_density':
-            return Cube(self.spin_density, self.structure, np.zeros(3), comment + '  Spin Density\n')
+            return Cube(data=self.spin_density,
+                        structure=self.structure,
+                        comment=comment + '  Spin Density\n',
+                        origin=np.zeros(3))
         elif volumetric_data == 'spin_major':
-            return Cube(self.structure, comment + '  Major Spin\n', np.array(list(self.spin_density.shape)),
-                        np.zeros(self.structure.natoms), (self.charge_density + self.spin_density) / 2)
+            return Cube(data=(self.charge_density + self.spin_density)/2,
+                        structure=self.structure,
+                        comment=comment+'  Major Spin\n',
+                        origin=np.zeros(3))
         elif volumetric_data == 'spin_minor':
-            return Cube(self.structure, comment + '  Minor Spin\n', np.array(list(self.spin_density.shape)),
-                        np.zeros(self.structure.natoms), (self.charge_density - self.spin_density) / 2)
+            return Cube(data=(self.charge_density - self.spin_density)/2,
+                        structure=self.structure,
+                        comment=comment+'  Minor Spin\n',
+                        origin=np.zeros(3))
 
     def to_file(self, filepath):
         #TODO write to_file func

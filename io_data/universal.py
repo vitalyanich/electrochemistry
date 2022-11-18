@@ -36,7 +36,7 @@ class Cube:
 
     def __add__(self, other):
         assert isinstance(other, Cube), 'Other object must belong to Cube class'
-        assert self.origin == other.origin, 'Two Cube instances must have the same origin'
+        assert (self.origin == other.origin).all(), 'Two Cube instances must have the same origin'
         assert self.volumetric_data.shape == other.volumetric_data.shape, 'Two Cube instances must have ' \
                                                                           'the same shape of volumetric_data'
         if self.structure != other.structure:

@@ -358,7 +358,7 @@ class STM:
         This is generator of acceptor orbitals using tip_types.py module
         :return:
         """
-        bohr_radius = 0.529
+        bohr_radius = 0.529 #TODO better to get it from core.constants
         b1, b2, b3 = self._get_basis_vectors()
         bn1 = b1 / shape[0]
         bn2 = b2 / shape[1]
