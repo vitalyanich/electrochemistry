@@ -1,6 +1,6 @@
 import numpy as np
-from ..core.constants import ElemNum2Name, ElemName2Num, Bohr2Angstrom, Angstrom2Bohr
-from ..core.structure import Structure
+from echem.core.constants import ElemNum2Name, ElemName2Num, Bohr2Angstrom, Angstrom2Bohr
+from echem.core.structure import Structure
 import warnings
 
 
@@ -9,12 +9,14 @@ class Cube:
                  data: np.ndarray,
                  structure: Structure,
                  origin: np.ndarray,
+                 units_data: str = 'Bohr',
                  comment: str = None,
                  charges=None,
                  dset_ids=None):
         self.volumetric_data = data
         self.structure = structure
         self.origin = origin
+        self.units_data = units_data
 
         if comment is None:
             self.comment = 'Comment is not defined\nGood luck!\n'
@@ -36,7 +38,7 @@ class Cube:
 
     def __add__(self, other):
         assert isinstance(other, Cube), 'Other object must belong to Cube class'
-        assert (self.origin == other.origin).all(), 'Two Cube instances must have the same origin'
+        assert np.array_equal(self.origin, other.origin), 'Two Cube instances must have the same origin'
         assert self.volumetric_data.shape == other.volumetric_data.shape, 'Two Cube instances must have ' \
                                                                           'the same shape of volumetric_data'
         if self.structure != other.structure:
@@ -48,11 +50,11 @@ class Cube:
 
     def __sub__(self, other):
         assert isinstance(other, Cube), 'Other object must belong to Cube class'
-        assert self.origin == other.origin, 'Two Cube instances must have the same origin'
+        assert np.array_equal(self.origin, other.origin), 'Two Cube instances must have the same origin'
         assert self.volumetric_data.shape == other.volumetric_data.shape, 'Two Cube instances must have ' \
                                                                           'the same shape of volumetric_data'
         if self.structure != other.structure:
-            warnings.warn('Two Cube instances have different structures. '
+            warnings.warn('\nTwo Cube instances have different structures. '
                           'The structure will be taken from the 1st (self) instance. '
                           'Hope you know, what you are doing')
 
@@ -109,7 +111,7 @@ class Cube:
 
             for atom in range(natoms):
                 line = file.readline().split()
-                species += ElemNum2Name[int(line[0])]
+                species += [ElemNum2Name[int(line[0])]]
                 charges[atom] = float(line[1])
                 coords[atom, :] = line[2:]
 
@@ -120,9 +122,10 @@ class Cube:
 
             structure = Structure(lattice, species, coords, coords_are_cartesian=True)
 
-            dset_ids = []
+            dset_ids = None
             dset_ids_processed = -1
             if dset_ids_flag is True:
+                dset_ids = []
                 line = file.readline().split()
                 n_data = int(line[0])
                 if n_data < 1:
@@ -136,8 +139,8 @@ class Cube:
                 dset_ids = np.array(dset_ids)
 
             if n_data != 1:
-                raise ValueError(f'The processing of cube files with more than 1 data values is not implemented.'
-                                 f' n_data = {n_data}')
+                raise NotImplemented(f'The processing of cube files with more than 1 data values is not implemented.'
+                                     f' n_data = {n_data}')
 
             data = np.zeros((NX, NY, NZ))
             indexes = np.arange(0, NX * NY * NZ)
@@ -151,22 +154,22 @@ class Cube:
                     data[indexes_1[i], indexes_2[i], indexes_3[i]] = float(value)
                     i += 1
 
-            return Cube(data, structure, origin, comment, charges, dset_ids)
+            return Cube(data, structure, origin, units, comment, charges, dset_ids)
 
-    def reduce(self, factor):
-        from skimage.measure import block_reduce
-        try:
-            volumetric_data_reduced = block_reduce(self.volumetric_data, block_size=(factor, factor, factor), func=np.mean)
-            Ns_reduced = np.shape(volumetric_data_reduced)
-        except:
-            raise ValueError('Try another factor value')
-        return Cube(volumetric_data_reduced, self.structure, self.comment, Ns_reduced, self.charges)
+    #def reduce(self, factor):
+    #    from skimage.measure import block_reduce
+    #    try:
+    #        volumetric_data_reduced = block_reduce(self.volumetric_data, block_size=(factor, factor, factor), func=np.mean)
+    #        Ns_reduced = np.shape(volumetric_data_reduced)
+    #    except:
+    #        raise ValueError('Try another factor value')
+    #    return Cube(volumetric_data_reduced, self.structure, self.comment, Ns_reduced, self.charges)
 
     def to_file(self, filepath, units='Bohr'):
         if not self.structure.coords_are_cartesian:
             self.structure.mod_coords_to_cartesian()
 
-        Ns = self.volumetric_data.shape
+        Ns = np.array(self.volumetric_data.shape)
         width_Ni = len(str(np.max(Ns)))
         if units == 'Angstrom':
             Ns = - Ns
@@ -278,14 +281,25 @@ class Cube:
         else:
             return scale * np.max(avr)
 
-    def get_voxel(self):
+    def get_voxel(self, units='Angstrom'):
         NX, NY, NZ = self.volumetric_data.shape
         voxel = self.structure.lattice.copy()
         voxel[0] /= NX
         voxel[1] /= NY
         voxel[2] /= NZ
+        if units == 'Angstrom':
+            return voxel
+        elif units == 'Bohr':
+            return voxel * Angstrom2Bohr
+        else:
+            raise ValueError('units can be \'Angstrom\' or \'Bohr\'')
 
-        return voxel
+    def get_integrated_number(self):
+        if self.units_data == 'Bohr':
+            voxel_volume = np.linalg.det(self.get_voxel(units='Bohr'))
+            return voxel_volume * np.sum(self.volumetric_data)
+        else:
+            raise NotImplemented()
 
     def assign_top_n_data_to_atoms(self, n_top, r):
         """Assign top n abs of volumetric data to atoms. Might be used to assign electron density to atoms.

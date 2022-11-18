@@ -1,28 +1,10 @@
-if __name__ == '__main__':
-    import sys, importlib
-    from pathlib import Path
-
-    def import_parents(level=1):
-        global __package__
-        file = Path(__file__).resolve()
-        parent, top = file.parent, file.parents[level]
-        sys.path.append(str(top))
-        try:
-            sys.path.remove(str(parent))
-        except ValueError:  # already removed
-            pass
-        __package__ = '.'.join(parent.parts[len(top.parts):])
-        importlib.import_module(__package__)  # won't be needed after that
-
-    if __name__ == '__main__' and __package__ is None:
-        import_parents(level=2)
-
-
 import numpy as np
 import pandas as pd
 import re
 from monty.re import regrep
 from tqdm import tqdm
+from .universal import Xyz
+from nptyping import NDArray, Shape, Number
 
 
 class SCFLog:
@@ -136,7 +118,6 @@ class SCFLog:
                         i += 1
                     elif first_columns_appended is True:
                         last_batch_added = True
-                        #df = pd.concat([df, pd.DataFrame(mos_tmp)], axis=1)
                         for j in range(len(mos_tmp)):
                             df[mos_tmp[j][0]] = mos_tmp[j][1:]
                         mos_tmp = [[] for _ in range(len(line))]
@@ -156,10 +137,35 @@ class SCFLog:
         return SCFLog(np.array(eigs), np.array(occs), mos_arr)
 
 
-if __name__ == '__main__':
-    #from io_data.universal import Cube
-    OO = SCFLog.from_file('E:/Setup/_Science/Orca_5.0.1/test.scf.log')
-    #eigs = OO.eigenvalues[:13]
-    #for i in range(13):
-    #    cube = Cube.from_file(f'E:/Setup/_Science/Orca_5.0.1/test.mo{i}a.cube')
-    #    print(i, np.nonzero(np.sum(cube.assign_top_n_data_to_atoms(50, 1), axis=-1)))
+class XyzTrajectory:
+    def __init__(self,
+                 first_xyz: Xyz,
+                 trajectory: NDArray[Shape['Nsteps, Natoms, 3'], Number],
+                 energies_pot: NDArray[Shape['Nsteps'], Number]):
+        self.first_xyz = first_xyz
+        self.trajectory = trajectory
+        self.energies_pot = energies_pot
+
+    @staticmethod
+    def from_file(filepath):
+        first_xyz = Xyz.from_file(filepath)
+
+        trajectory = []
+        energies_pot = []
+        with open(filepath, 'rt') as file:
+            while True:
+                try:
+                    natoms = int(file.readline().strip())
+                except:
+                    break
+                line = file.readline()
+                energies_pot.append(float(line.split()[5]))
+                #energies_pot.append(float(line.split()[8].split('=')[1]))
+
+                coords = np.zeros((natoms, 3))
+                for i in range(natoms):
+                    line = file.readline().split()
+                    coords[i] = [float(j) for j in line[1:]]
+                trajectory.append(coords)
+
+            return XyzTrajectory(first_xyz, np.array(trajectory), np.array(energies_pot))

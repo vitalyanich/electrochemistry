@@ -7,7 +7,7 @@ from scipy.interpolate import griddata
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.ndimage.filters import gaussian_filter1d
 import tip_types
-from ..core.constants import ElemNum2Name
+from echem.core import ElemNum2Name
 plt.switch_backend('agg')
 
 

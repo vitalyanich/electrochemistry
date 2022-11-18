@@ -4,11 +4,9 @@ from .GerischerMarkus import GM
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from ..core import constants
-from ..io_data.vasp import Outcar
-from ..io_data.vasp import Poscar
-from ..io_data.vasp import Wavecar
 from pymatgen.io.vasp import Procar
+from echem.core import constants
+from echem.io_data import vasp
 
 
 class kHET:
@@ -24,8 +22,8 @@ class kHET:
         if working_folder == '':
             working_folder = '.'
         # TODO think about better than get class objects for outcar and poscar info
-        self.outcar = Outcar.from_file(working_folder + '/OUTCAR')
-        self.poscar = Poscar.from_file(working_folder + '/POSCAR')
+        self.outcar = vasp.Outcar.from_file(working_folder + '/OUTCAR')
+        self.poscar = vasp.Poscar.from_file(working_folder + '/POSCAR')
         self.procar = Procar(working_folder + '/PROCAR')
         self.working_folder = working_folder
         self.path_to_data = working_folder + '/Saved_data'
@@ -81,7 +79,7 @@ class kHET:
             print('Error! kb_array is empty. Try to decrease threshold_value')
 
     def load_wavecar(self):
-        self.wavecar = Wavecar.from_file(self.working_folder+'/WAVECAR', self.kb_array)
+        self.wavecar = vasp.Wavecar.from_file(self.working_folder + '/WAVECAR', self.kb_array)
 
     def plot_distributions(self):
         #TODO make it
