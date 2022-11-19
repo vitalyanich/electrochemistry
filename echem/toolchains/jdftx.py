@@ -1,16 +1,17 @@
 from pathlib import Path
 from typing_extensions import Required, NotRequired, TypedDict
-from echem.io_data.jdftx import VolumetricData
-from echem.io_data.jdftx import Output
+from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos
 from echem.io_data.ddec import AtomicNetCharges
-from echem.core.constants import Hartree2eV, Bohr2Angstrom
+from echem.core.constants import Hartree2eV, Bohr2Angstrom, Angstrom2Bohr
 from monty.re import regrep
 from subprocess import Popen, PIPE
 from timeit import default_timer as timer
 from datetime import timedelta
 import matplotlib.pyplot as plt
 import re
+import shutil
 import numpy as np
+from nptyping import NDArray, Shape, Number
 
 
 class System(TypedDict):
@@ -20,6 +21,7 @@ class System(TypedDict):
     is_pzc: bool
     output: Output
     ddec_nac: AtomicNetCharges
+
 
 class DDEC_params(TypedDict):
     path_atomic_densities: Required[str]
@@ -312,3 +314,58 @@ class InfoExtractor:
             ax_f.set_ylabel(r'$Average \ Force, \ eV / \AA^3$', color='g', fontsize=13)
             ax_f.legend(loc='upper right', bbox_to_anchor=(1, 0.9), fontsize=13)
             ax_f.set_yscale('log')
+
+
+def create_z_displacements(folder_source: str | Path,
+                           folder_result: str | Path,
+                           n_atoms_mol: int,
+                           scan_range: NDArray[Shape['Nsteps'], Number] | list[float],
+                           create_flat_surface: bool = False,
+                           folder_files_to_copy: str | Path = None) -> None:
+    """
+    Create folder with all necessary files for displacing the selected atoms along z-axis
+    Args:
+        folder_source: path for the folder with .lattice and .ionpos JDFTx files that will be initial files for configurations
+        folder_result: path for the folder where all final files will be saved
+        n_atoms_mol: number of atoms that should be displaced. All atoms must be in the end atom list in .ionpos
+        scan_range: array with displacement (in angstroms) for the selected atoms
+        create_flat_surface: if True all atoms will be projected into graphene sirface; if False all atoms except molecule's remain at initial positions
+        folder_files_to_copy: path for the folder with input.in and run.sh files to copy into each folder woth final configurations
+    """
+    if isinstance(folder_source, str):
+        folder_source = Path(folder_source)
+    if isinstance(folder_result, str):
+        folder_result = Path(folder_result)
+    if isinstance(folder_files_to_copy, str):
+        folder_files_to_copy = Path(folder_files_to_copy)
+
+    substrate, adsorbate, idx, *_ = folder_source.name.split('_')
+    lattice = Lattice.from_file(folder_source / 'jdft.lattice')
+
+    for d_ang in scan_range:
+        d_ang = np.round(d_ang, 2)
+        d_bohr = d_ang * Angstrom2Bohr
+
+        ionpos = Ionpos.from_file(folder_source / 'jdft.ionpos')
+
+        Path(folder_result / f'{substrate}_{adsorbate}_{idx}/{d_ang}').mkdir(parents=True, exist_ok=True)
+        ionpos.coords[-n_atoms_mol:, 2] += d_bohr
+
+        idx_surf = [i for i, coord in enumerate(ionpos.coords) if np.abs(coord[0]) < 1 or np.abs(coord[1]) < 1]
+        z_carbon = np.mean(ionpos.coords[idx_surf], axis=0)[2]
+
+        if create_flat_surface:
+            ionpos.coords[:-n_atoms_mol, 2] = z_carbon
+        else:
+            ionpos.coords[idx_surf, 2] = z_carbon
+
+        ionpos.move_scale[-n_atoms_mol:] = 0
+        ionpos.move_scale[idx_surf] = 0
+
+        ionpos.to_file(folder_result / f'{substrate}_{adsorbate}_{idx}/{d_ang}/jdft.ionpos')
+        lattice.to_file(folder_result / f'{substrate}_{adsorbate}_{idx}/{d_ang}/jdft.lattice')
+        poscar = ionpos.convert('vasp', lattice)
+        poscar.to_file(folder_result / f'{substrate}_{adsorbate}_{idx}/{d_ang}/POSCAR')
+
+        shutil.copyfile(folder_files_to_copy / 'input.in', folder_result / f'{substrate}_{adsorbate}_{idx}/{d_ang}/input.in')
+        shutil.copyfile(folder_files_to_copy / 'run.sh', folder_result / f'{substrate}_{adsorbate}_{idx}/{d_ang}/run.sh')
