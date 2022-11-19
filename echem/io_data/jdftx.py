@@ -611,7 +611,7 @@ class BandProjections:
         return BandProjections(proj_coeffs, weights, species, norbs_per_atomtype, orbs_names, orbs_data)
 
     def get_PDOS(self,
-                 atom_numbers: Union[list[int], int],
+                 atom_numbers: list[int] | int,
                  eigenvals: Eigenvals,
                  get_orbs_names: bool = False,
                  specific_l: int = None,
