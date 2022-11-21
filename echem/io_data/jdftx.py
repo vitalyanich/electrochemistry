@@ -220,7 +220,7 @@ class Output(IonicDynamics):
         return self.magnetization_hist[-1, 1]
 
     @staticmethod
-    def from_file(filepath: Union[str, Path]):
+    def from_file(filepath: str | Path):
         if isinstance(filepath, str):
             filepath = Path(filepath)
 
@@ -336,7 +336,7 @@ class Output(IonicDynamics):
 class EBS_data:
 
     @staticmethod
-    def from_file(filepath: Union[str, Path],
+    def from_file(filepath: str | Path,
                   output: Output) -> NDArray[Shape['Nspin, Nkpts, Nbands'], Number]:
 
         if isinstance(filepath, Path):
@@ -429,7 +429,7 @@ class VolumetricData:
         return VolumetricData(self.data - other.data, other.structure)
 
     @staticmethod
-    def from_file(filepath: Union[str, Path],
+    def from_file(filepath: str | Path,
                   fft_box_size: NDArray[Shape['3'], Number],
                   structure: Structure):
 
@@ -503,7 +503,7 @@ class BandProjections:
         return self.proj_coeffs.shape[4]
 
     @staticmethod
-    def from_file(filepath: Union[str, Path]):
+    def from_file(filepath: str | Path):
 
         if isinstance(filepath, str):
             filepath = Path(filepath)
@@ -611,7 +611,7 @@ class BandProjections:
         return BandProjections(proj_coeffs, weights, species, norbs_per_atomtype, orbs_names, orbs_data)
 
     def get_PDOS(self,
-                 atom_numbers: Union[list[int], int],
+                 atom_numbers: list[int] | int,
                  eigenvals: Eigenvals,
                  get_orbs_names: bool = False,
                  specific_l: int = None,

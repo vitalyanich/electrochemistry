@@ -8,6 +8,8 @@ from echem.core.ionic_dynamics import IonicDynamics
 from echem.core.constants import Angstrom2Bohr
 from . import jdftx
 from pymatgen.io.vasp import Procar as Procar_pmg
+from nptyping import NDArray, Shape, Number
+from pathlib import Path
 import warnings
 
 
@@ -16,7 +18,7 @@ class Poscar:
     def __init__(self,
                  structure: Structure,
                  comment: str = None,
-                 sdynamics_data: Union[list, np.ndarray] = None):
+                 sdynamics_data: list = None):
         """
         Create an Poscar instance
         Args:
@@ -33,7 +35,7 @@ class Poscar:
         return f'{self.comment}\n' + repr(self.structure)
 
     @staticmethod
-    def from_file(filepath):
+    def from_file(filepath: str | Path):
         """
         Static method to read a POSCAR file
         Args:
@@ -42,6 +44,9 @@ class Poscar:
         Returns:
             Poscar class object
         """
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
@@ -95,7 +100,10 @@ class Poscar:
         else:
             return Poscar(struct, comment)
 
-    def to_file(self, filepath):
+    def to_file(self, filepath: str | Path):
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
         file = open(filepath, 'w')
         file.write(f'{self.comment}\n')
         file.write('1\n')
@@ -179,14 +187,15 @@ class Poscar:
 class Outcar(EBS, IonicDynamics):
     """Class that reads VASP OUTCAR files"""
 
-    def __init__(self, weights: np.ndarray,
-                 efermi_hist: np.ndarray,
-                 eigenvalues_hist: np.ndarray,
-                 occupations_hist: np.ndarray,
-                 energy_hist: np.ndarray,
-                 energy_ionic_hist: np.ndarray,
-                 forces_hist: np.ndarray):
-        EBS.__init__(self, eigenvalues_hist[-1], occupations_hist[-1], weights, efermi_hist[-1])
+    def __init__(self,
+                 weights: NDArray[Shape['Nkpts'], Number],
+                 efermi_hist: NDArray[Shape['Nisteps'], Number],
+                 eigenvalues_hist: NDArray[Shape['Nisteps, Nspin, Nkpts, Nbands'], Number],
+                 occupations_hist: NDArray[Shape['Nisteps, Nspin, Nkpts, Nbands'], Number],
+                 energy_hist: NDArray[Shape['Nallsteps'], Number],
+                 energy_ionic_hist: NDArray[Shape['Nisteps'], Number],
+                 forces_hist: NDArray[Shape['Nispeps, Natoms, 3'], Number]):
+        EBS.__init__(self, eigenvalues_hist[-1], weights, efermi_hist[-1], occupations_hist[-1])
         IonicDynamics.__init__(self, forces_hist)
 
         self.efermi_hist = efermi_hist
@@ -245,7 +254,10 @@ class Outcar(EBS, IonicDynamics):
         return self.energy_ionic_hist[-1]
 
     @staticmethod
-    def from_file(filepath):
+    def from_file(filepath: str | Path):
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
@@ -260,7 +272,7 @@ class Outcar(EBS, IonicDynamics):
                     'kpoints': r'k-point\s+(\d+)\s:\s+[-.\d]+\s+[-.\d]+\s+[-.\d]+\n',
                     'forces': r'\s+POSITION\s+TOTAL-FORCE',
                     'spin': r'spin component \d+\n'}
-        matches = regrep(filepath, patterns)
+        matches = regrep(str(filepath), patterns)
 
         nbands = int(matches['nbands'][0][0][0])
         nkpts = int(matches['nkpts'][0][0][0])
@@ -294,8 +306,8 @@ class Outcar(EBS, IonicDynamics):
         for step in range(nisteps):
             for spin in range(nspin):
                 for kpoint in range(nkpts):
-                    arr = data[each_kpoint_list[nkpts * nspin * step + nkpts * spin + kpoint, 1] + 2:each_kpoint_list[
-                                                nkpts * nspin * step + nkpts * spin + kpoint, 1] + 2 + nbands]
+                    arr = data[each_kpoint_list[nkpts * nspin * step + nkpts * spin + kpoint, 1] + 2:
+                               each_kpoint_list[nkpts * nspin * step + nkpts * spin + kpoint, 1] + 2 + nbands]
                     eigenvalues_hist[step, spin, kpoint] = [float(i.split()[1]) for i in arr]
                     occupations_hist[step, spin, kpoint] = [float(i.split()[2]) for i in arr]
 
@@ -394,6 +406,8 @@ class Procar:
                 E_max = kwargs['emax']
             else:
                 E_max = np.max(self.eigenvalues)
+        else:
+            raise ValueError(f'Only Gaussian smearing is supported but you used {smearing} instead')
 
         E_arr = np.arange(E_min, E_max, dE)
         ngrid = E_arr.shape[0]
