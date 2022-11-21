@@ -6,7 +6,7 @@ class Structure:
     """
     Basic class for structure of unit/super cell.
     Args:
-        lattice: 2D array that contains lattice vectors. Each row should corresponds to a lattice vector.
+        lattice: 2D array that contains lattice vectors. Each row should correspond to a lattice vector.
             E.g., [[5, 5, 0], [7, 4, 0], [0, 0, 25]].
         species: List of species on each site. Usually list of elements, e.g., ['Al', 'Al', 'O', 'H'].
         coords: List of lists or np.ndarray (Nx3 dimension) that contains coords of each species.
