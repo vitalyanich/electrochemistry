@@ -6,7 +6,7 @@ from echem.core.ionic_dynamics import IonicDynamics
 from echem.core.electronic_structure import EBS
 from echem.io_data import vasp
 from echem.io_data.universal import Cube
-from typing import Union
+from typing import Union, Literal
 from pathlib import Path
 import warnings
 import copy
@@ -67,7 +67,10 @@ class Ionpos:
     def __init__(self,
                  species: list[str],
                  coords: NDArray[Shape['Natoms, 3'], Number],
-                 move_scale: Union[list, NDArray[Shape['Natoms'], Number]] = None):
+                 move_scale: list[int] | NDArray[Shape['Natoms'], Number] = None,
+                 constraint_type: list[Literal['HyperPlane', 'Linear', 'None', 'Planar'] | None] = None,
+                 constraint_params: list[list[float] | None] = None):
+
         self.species = species
         self.coords = coords
         if move_scale is None:
@@ -75,9 +78,11 @@ class Ionpos:
         elif isinstance(move_scale, list):
             move_scale = np.array(move_scale, dtype=int)
         self.move_scale = move_scale
+        self.constraint_type = constraint_type
+        self.constraint_params = constraint_params
 
     @staticmethod
-    def from_file(filepath: Union[str, Path]):
+    def from_file(filepath: str | Path):
         if isinstance(filepath, str):
             filepath = Path(filepath)
 
@@ -86,22 +91,31 @@ class Ionpos:
         file.close()
 
         patterns = {'coords': r'^\s*ion\s+'}
-        matches = regrep(filepath, patterns)
+        matches = regrep(str(filepath), patterns)
 
         natoms = len(matches['coords'])
         species = []
         coords = np.zeros((natoms, 3))
         move_scale = np.zeros(natoms, dtype=int)
+        constraint_type = []
+        constraint_params = []
+
         for i, ion in enumerate(matches['coords']):
             line = data[ion[1]].split()
             species.append(line[1])
             coords[i] = [line[2], line[3], line[4]]
             move_scale[i] = line[5]
+            if len(line) > 6:
+                constraint_type.append(line[6])
+                constraint_params.append([float(line[7]), float(line[8]), float(line[9])])
+            else:
+                constraint_type.append(None)
+                constraint_params.append(None)
 
-        return Ionpos(species, coords, move_scale)
+        return Ionpos(species, coords, move_scale, constraint_type, constraint_params)
 
     def to_file(self,
-                filepath: Union[str, Path]) -> None:
+                filepath: str | Path) -> None:
         if isinstance(filepath, str):
             filepath = Path(filepath)
 
@@ -109,11 +123,27 @@ class Ionpos:
 
         width_species = max([len(sp) for sp in self.species])
         width_coords_float = max(len(str(int(np.max(self.coords)))), len(str(int(np.min(self.coords))))) + 16
-        for sp, coord, ms in zip(self.species, self.coords, self.move_scale):
-            file.write(f'ion {sp:{width_species}}  ')
-            for coord_i in coord:
-                file.write(f'{coord_i:{width_coords_float}.15f}  ')
-            file.write(f'{ms}\n')
+
+        if self.constraint_params is None and self.constraint_params is None:
+            for sp, coord, ms, ctype, cparams in zip(self.species, self.coords, self.move_scale):
+                file.write(f'ion {sp:{width_species}}  ')
+                for coord_i in coord:
+                    file.write(f'{coord_i:{width_coords_float}.15f}  ')
+                file.write(f'{ms}\n')
+        elif self.constraint_params is not None and self.constraint_params is not None:
+            for sp, coord, ms, ctype, cparams in zip(self.species, self.coords, self.move_scale,
+                                                     self.constraint_type, self.constraint_params):
+                file.write(f'ion {sp:{width_species}}  ')
+                for coord_i in coord:
+                    file.write(f'{coord_i:{width_coords_float}.15f}  ')
+                if ctype is None:
+                    file.write(f'{ms}\n')
+                else:
+                    file.write(f'{ms}  ')
+                    file.write(f'{ctype}  ')
+                    file.write(f'{cparams[0]}  {cparams[1]}  {cparams[2]}\n')
+        else:
+            raise ValueError('constraint_type and constraint_params must be both specified or both be None')
 
         file.close()
 
