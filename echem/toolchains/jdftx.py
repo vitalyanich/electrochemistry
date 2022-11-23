@@ -155,13 +155,27 @@ class InfoExtractor:
 
         files = [file.name for file in path_root_folder.iterdir() if file.is_file()]
 
-        substrate, adsorbate, idx, *_ = path_root_folder.name.split('_')
-        if 'vib' in _:
-            return None
-        if '+' in substrate or '-' in substrate:
-            is_pzc = False
+        try:
+            substrate, adsorbate, idx, *_ = path_root_folder.name.split('_')
+            if 'vib' in _:
+                return None
+            if '+' in substrate or '-' in substrate:
+                is_pzc = False
+            else:
+                is_pzc = True
+        except:
+            try:
+                substrate, adsorbate, idx, *_ = path_root_folder.parent.name.split('_')
+                idx = float(path_root_folder.name)
+                if '+' in substrate or '-' in substrate:
+                    is_pzc = False
+                else:
+                    is_pzc = True
+            except:
+                pass
         else:
-            is_pzc = True
+            raise ValueError(f'Can not extract information from {path_root_folder=}')
+
         output = Output.from_file(path_root_folder / self.output_name)
 
         # Check whether all nessesary files have been already created
