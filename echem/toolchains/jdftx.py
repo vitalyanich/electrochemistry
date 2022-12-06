@@ -143,6 +143,11 @@ class InfoExtractor:
         depth = max([len(f.parents) for f in subfolders])
         subfolders = [f for f in subfolders if len(f.parents) == depth]
 
+        subfolders_PZC = [folder for folder in subfolders if 'PZC' in folder.parent.name]
+        subfolders = [folder for folder in subfolders if 'PZC' not in folder.parent.name]
+
+        for folder in subfolders_PZC:
+            self.get_info(folder, recreate_files)
         for folder in subfolders:
             self.get_info(folder, recreate_files)
 
@@ -157,7 +162,7 @@ class InfoExtractor:
 
         try:
             substrate, adsorbate, idx, *_ = path_root_folder.name.split('_')
-            if 'vib' in _:
+            if 'vib' in _ or 'bad' in _:
                 return None
             if '+' in substrate or '-' in substrate:
                 is_pzc = False
@@ -173,8 +178,8 @@ class InfoExtractor:
                     is_pzc = True
             except:
                 pass
-        else:
-            raise ValueError(f'Can not extract information from {path_root_folder=}')
+        #else:
+        #    raise ValueError(f'Can not extract information from {path_root_folder=}')
 
         output = Output.from_file(path_root_folder / self.output_name)
 
