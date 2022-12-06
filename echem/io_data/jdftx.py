@@ -6,7 +6,8 @@ from echem.core.ionic_dynamics import IonicDynamics
 from echem.core.electronic_structure import EBS
 from echem.io_data import vasp
 from echem.io_data.universal import Cube
-from typing import Union, Literal
+from typing import Union, Literal, TypedDict
+from typing_extensions import NotRequired
 from pathlib import Path
 import warnings
 import copy
@@ -19,7 +20,7 @@ class Lattice:
         self.lattice = lattice
 
     @staticmethod
-    def from_file(filepath: Union[str, Path]):
+    def from_file(filepath: str | Path):
 
         if isinstance(filepath, str):
             filepath = Path(filepath)
@@ -29,7 +30,7 @@ class Lattice:
         file.close()
 
         patterns = {'lattice': r'^\s*lattice\s+'}
-        matches = regrep(filepath, patterns)
+        matches = regrep(str(filepath), patterns)
 
         lattice = []
         i = 0
@@ -148,7 +149,7 @@ class Ionpos:
         file.close()
 
     def convert(self,
-                format: str, *args):
+                format: Literal['vasp'], *args):
         if format == 'vasp':
             lattice = np.transpose(args[0].lattice) * Bohr2Angstrom
             return vasp.Poscar(Structure(lattice, self.species, self.coords * Bohr2Angstrom))
@@ -199,10 +200,16 @@ class Input:
         return Input(structure)
 
 
+class EnergyIonicHist(TypedDict):
+    F: NDArray[Shape['Nsteps'], Number]
+    G: NotRequired[NDArray[Shape['Nsteps'], Number]]
+    muN: NotRequired[NDArray[Shape['Nsteps'], Number]]
+
+
 class Output(IonicDynamics):
     def __init__(self,
                  fft_box_size: NDArray[Shape['3'], Number],
-                 energy_ionic_hist: dict,
+                 energy_ionic_hist: EnergyIonicHist,
                  coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  forces_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  nelec_hist: np.ndarray,
@@ -279,11 +286,10 @@ class Output(IonicDynamics):
                     'muN': r'\s+muN\s+=\s+([-+]?\d*\.\d*)',
                     'G': r'\s+G\s+=\s+([-+]?\d*\.\d*)'}
 
-        matches = regrep(filepath, patterns)
+        matches = regrep(str(filepath), patterns)
 
-        energy_ionic_hist = {}
         F = np.array([float(i[0][0]) for i in matches['F']])
-        energy_ionic_hist['F'] = F
+        energy_ionic_hist: EnergyIonicHist = {'F': F}
         if 'muN' in matches.keys():
             energy_ionic_hist['muN'] = np.array([float(i[0][0]) for i in matches['muN']])
         if 'G' in matches.keys():
@@ -386,12 +392,12 @@ class EBS_data:
 class Eigenvals(EBS_data):
     def __init__(self,
                  eigenvalues: NDArray[Shape['Nspin, Nkpts, Nbands'], Number],
-                 units: str):
+                 units: Literal['eV', 'Hartree']):
         self.eigenvalues = eigenvalues
         self.units = units
 
     @staticmethod
-    def from_file(filepath: Union[str, Path],
+    def from_file(filepath: str | Path,
                   output: Output):
 
         if isinstance(filepath, Path):
@@ -421,7 +427,7 @@ class Fillings(EBS_data):
         self.occupations = occupations
 
     @staticmethod
-    def from_file(filepath: Union[str, Path],
+    def from_file(filepath: str | Path,
                   output: Output):
 
         if isinstance(filepath, Path):
@@ -443,7 +449,7 @@ class VolumetricData:
         assert self.data.shape == other.data.shape, f'Shapes of two data arrays must be the same but they are ' \
                                                     f'{self.data.shape} and {other.data.shape}'
         if self.structure != other.structure:
-            warnings.warn('Two VolumetricData instances contain different Staructures. '
+            warnings.warn('Two VolumetricData instances contain different Structures. '
                           'The Structure will be taken from the 2nd (other) instance. '
                           'Hope you know, what you are doing')
         return VolumetricData(self.data + other.data, other.structure)
@@ -453,7 +459,7 @@ class VolumetricData:
         assert self.data.shape == other.data.shape, f'Shapes of two data arrays must be the same but they are ' \
                                                     f'{self.data.shape} and {other.data.shape}'
         if self.structure != other.structure:
-            warnings.warn('Two VolumetricData instances contain different Staructures. '
+            warnings.warn('Two VolumetricData instances contain different Structures. '
                           'The Structure will be taken from the 2nd (other) instance. '
                           'Hope you know, what you are doing')
         return VolumetricData(self.data - other.data, other.structure)
@@ -480,7 +486,7 @@ class kPts:
         self.weights = weights
 
     @staticmethod
-    def from_file(filepath: Union[str, Path]):
+    def from_file(filepath: str | Path):
 
         if isinstance(filepath, Path):
             filepath = Path(filepath)
@@ -543,7 +549,7 @@ class BandProjections:
         file.close()
 
         patterns = {'x': r'#\s+\d+'}
-        matches = regrep(filepath, patterns)
+        matches = regrep(str(filepath), patterns)
 
         nstates = int(data[0].split()[0])
         nbands = int(data[0].split()[2])
@@ -663,11 +669,11 @@ class BandProjections:
             raise ValueError('You can not set zero_at_fermi=True if you did not specify efermi value')
 
         if emin is None:
-            E_min = np.min(self.eigenvalues) - 1
+            emin = np.min(self.eigenvalues) - 1
         if emax is None:
-            E_max = np.max(self.eigenvalues) + 1
+            emax = np.max(self.eigenvalues) + 1
 
-        E_arr = np.arange(E_min, E_max, dE)
+        E_arr = np.arange(emin, emax, dE)
         ngrid = E_arr.shape[0]
 
         idxs = []
