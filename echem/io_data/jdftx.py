@@ -213,7 +213,7 @@ class Output(IonicDynamics):
                  coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  forces_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  nelec_hist: np.ndarray,
-                 magnetization_hist: NDArray[Shape['Nesteps, 2'], Number],
+                 magnetization_hist: NDArray[Shape['Nesteps, 2'], Number] | None,
                  structure: Structure,
                  nbands: int,
                  nkpts: int,
@@ -250,11 +250,24 @@ class Output(IonicDynamics):
 
     @property
     def get_magnetization_abs(self):
-        return self.magnetization_hist[-1, 0]
+        if self.magnetization_hist is None:
+            raise ValueError('It is non-spin-polarized calculation')
+        else:
+            return self.magnetization_hist[-1, 0]
 
     @property
     def get_magnetization_tot(self):
-        return self.magnetization_hist[-1, 1]
+        if self.magnetization_hist is None:
+            raise ValueError('It is non-spin-polarized calculation')
+        else:
+            return self.magnetization_hist[-1, 1]
+
+    @property
+    def nspin(self):
+        if self.magnetization_hist is None:
+            return 1
+        else:
+            return 2
 
     @staticmethod
     def from_file(filepath: str | Path):
