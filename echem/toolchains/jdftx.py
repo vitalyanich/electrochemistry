@@ -314,11 +314,42 @@ class InfoExtractor:
         for system, ax_e in zip(systems, axs.flatten()):
             out = system['output']
 
-            ax_e.plot(range(out.nisteps), (out.energy_ionic_hist['F'] - out.energy_ionic_hist['F'][-1]) * Hartree2eV, color='r', label=r'$\Delta F$', ms=3, marker='o')
+            delta_ionic_energy = (out.energy_ionic_hist['F'] - out.energy_ionic_hist['F'][-1]) * Hartree2eV
+            if (delta_ionic_energy < 0).any():
+                energy_modulus_F = True
+                delta_ionic_energy = np.abs(delta_ionic_energy)
+            else:
+                energy_modulus_F = False
+
+            ax_e.plot(range(out.nisteps), delta_ionic_energy, color='r', label=r'$\Delta F$', ms=3, marker='o')
+
+            if 'G' in out.energy_ionic_hist.keys():
+                delta_ionic_energy = (out.energy_ionic_hist['G'] - out.energy_ionic_hist['G'][-1]) * Hartree2eV
+                if (delta_ionic_energy < 0).any():
+                    energy_modulus_G = True
+                    delta_ionic_energy = np.abs(delta_ionic_energy)
+                else:
+                    energy_modulus_G = False
+            else:
+                energy_modulus_G = None
+
+            ax_e.plot(range(out.nisteps), delta_ionic_energy, color='orange', label=r'$\Delta G$', ms=3, marker='o')
+
             ax_e.set_yscale('log')
             ax_e.set_xlabel(r'$Step$', fontsize=12)
-            ax_e.set_ylabel(r'$\Delta F, \ eV$', color='r', fontsize=14)
-            ax_e.legend(fontsize=14)
+            if energy_modulus_F:
+                ylabel = r'$|\Delta F|, \ $'
+            else:
+                ylabel = r'$\Delta F, \ $'
+            if energy_modulus_G is not None:
+                if energy_modulus_G:
+                    ylabel += r'$|\Delta G|, \ $'
+                else:
+                    ylabel += r'$\Delta G, \ $'
+            ylabel += r'$eV$'
+
+            ax_e.set_ylabel(ylabel, color='r', fontsize=14)
+            ax_e.legend(loc='upper right', fontsize=14)
 
             delta_E = (out.energy - energy_min) * Hartree2eV
             if np.abs(delta_E) < 1e-8:
@@ -331,7 +362,7 @@ class InfoExtractor:
             ax_f = ax_e.twinx()
             ax_f.plot(range(len(out.get_forces())), out.get_forces() * Hartree2eV / (Bohr2Angstrom ** 2), color='g', label=r'$\left< |\vec{F}| \right>$', ms=3, marker='o')
             ax_f.set_ylabel(r'$Average \ Force, \ eV / \AA^3$', color='g', fontsize=13)
-            ax_f.legend(loc='upper right', bbox_to_anchor=(1, 0.9), fontsize=13)
+            ax_f.legend(loc='upper right', bbox_to_anchor=(1, 0.8), fontsize=13)
             ax_f.set_yscale('log')
 
 

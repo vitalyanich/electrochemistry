@@ -20,7 +20,7 @@ class Poscar:
                  comment: str = None,
                  sdynamics_data: list = None):
         """
-        Create an Poscar instance
+        Create a Poscar instance
         Args:
             structure (Structure class): a base class that contains lattice, coords and species information
             comment (str): a VASP comment
