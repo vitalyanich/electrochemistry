@@ -353,9 +353,9 @@ class GM(ClassMethods):
 
         Parameters:
         ----------
-        V_std_pot_arr: float, np.array
+        V_std_pot_arr: float, np.ndarray
             A range of varying a standard potential
-        overpot_arr: float, np.array
+        overpot_arr: float, np.ndarray
             A range of varying an overpotential
         reverse: bool, optional
             if reverse is False the process of electron transfer from electrode to the oxidized state of the
@@ -366,12 +366,12 @@ class GM(ClassMethods):
         k_HET: np.array
             Calculated heterogeneous electron transfer rate constant according to Gerischer-Marcus model with quantum
             capacitance
-        dE_Q_arr: np.array, optional (if add_info == True)
+        dE_Q_arr: np.ndarray, optional (if add_info == True)
             Total shift of the Fermi energy due to the Quantum Capacitance for all calculated redox potentials or
             overpotentials
-        sigma_arr: np.array, optional (if add_info == True)
+        sigma_arr: np.ndarray, optional (if add_info == True)
             surface charge in microF/cm^2 for all calculated redox potentials or overpotentials
-        E_F_redox_arr: np.array, optional (if add_info == True)
+        E_F_redox_arr: np.ndarray, optional (if add_info == True)
             The sum of two energy displacement of the electrode due to the difference in Fermi level of Redox couple
             and the electrode and overpotential. It splits into dE_Q and dE_EDL. For all calculated redox potentials
             or overpotentials

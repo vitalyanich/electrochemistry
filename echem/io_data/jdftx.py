@@ -125,13 +125,13 @@ class Ionpos:
         width_species = max([len(sp) for sp in self.species])
         width_coords_float = max(len(str(int(np.max(self.coords)))), len(str(int(np.min(self.coords))))) + 16
 
-        if self.constraint_params is None and self.constraint_params is None:
-            for sp, coord, ms, ctype, cparams in zip(self.species, self.coords, self.move_scale):
+        if self.constraint_params is None and self.constraint_type is None:
+            for sp, coord, ms in zip(self.species, self.coords, self.move_scale):
                 file.write(f'ion {sp:{width_species}}  ')
                 for coord_i in coord:
                     file.write(f'{coord_i:{width_coords_float}.15f}  ')
                 file.write(f'{ms}\n')
-        elif self.constraint_params is not None and self.constraint_params is not None:
+        elif self.constraint_params is not None and self.constraint_type is not None:
             for sp, coord, ms, ctype, cparams in zip(self.species, self.coords, self.move_scale,
                                                      self.constraint_type, self.constraint_params):
                 file.write(f'ion {sp:{width_species}}  ')
