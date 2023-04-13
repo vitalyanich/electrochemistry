@@ -249,14 +249,14 @@ class Output(IonicDynamics):
         return self.nelec_hist[-1]
 
     @property
-    def get_magnetization_abs(self):
+    def magnetization_abs(self):
         if self.magnetization_hist is None:
             raise ValueError('It is non-spin-polarized calculation')
         else:
             return self.magnetization_hist[-1, 0]
 
     @property
-    def get_magnetization_tot(self):
+    def magnetization_tot(self):
         if self.magnetization_hist is None:
             raise ValueError('It is non-spin-polarized calculation')
         else:

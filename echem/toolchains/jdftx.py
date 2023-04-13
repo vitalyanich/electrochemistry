@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos
@@ -44,7 +45,7 @@ class InfoExtractor:
         if 'path_ddec_executable' in ddec_params:
             self.path_ddec_executable = ddec_params['path_ddec_executable']
         elif do_ddec:
-            raise ValueError('"path_ddec_executable" ust be specified in ddec_params if do_ddec=True')
+            raise ValueError('"path_ddec_executable" must be specified in ddec_params if do_ddec=True')
 
         if systems is None:
             self.systems = []
@@ -214,9 +215,12 @@ class InfoExtractor:
                 n = n_up + n_dn
                 n.to_file(path_root_folder / 'valence_density.cube')
 
-                if output.get_magnetization_abs > 1e-2:
+                if output.magnetization_abs > 1e-2:
                     n = n_up - n_dn
-                    n.to_file(path_root_folder / 'spin_density.cube')
+                    n.to_file(path_root_folder / 'spin__density.cube')
+
+                if 'spin_density.cube' in files:
+                    os.remove(path_root_folder / 'spin_density.cube')
 
             elif f'{self.jdftx_prefix}.n' in files:
                 n = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.n',
