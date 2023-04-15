@@ -4,6 +4,7 @@ from echem.core.structure import Structure
 from echem.core.constants import Bohr2Angstrom, Hartree2eV, eV2Hartree
 from echem.core.ionic_dynamics import IonicDynamics
 from echem.core.electronic_structure import EBS
+from echem.core.thermal_properties import Thermal_properties
 from echem.io_data import vasp
 from echem.io_data.universal import Cube
 from typing import Union, Literal, TypedDict
@@ -210,8 +211,8 @@ class Output(IonicDynamics):
     def __init__(self,
                  fft_box_size: NDArray[Shape['3'], Number],
                  energy_ionic_hist: EnergyIonicHist,
-                 coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
-                 forces_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
+                 coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number] | None,
+                 forces_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number] | None,
                  nelec_hist: np.ndarray,
                  magnetization_hist: NDArray[Shape['Nesteps, 2'], Number] | None,
                  structure: Structure,
@@ -219,7 +220,8 @@ class Output(IonicDynamics):
                  nkpts: int,
                  mu: float,
                  HOMO: float,
-                 LUMO: float):
+                 LUMO: float,
+                 phonons: dict):
         super(Output, self).__init__(forces_hist)
         self.fft_box_size = fft_box_size
         self.energy_ionic_hist = energy_ionic_hist
@@ -232,6 +234,9 @@ class Output(IonicDynamics):
         self.mu = mu
         self.HOMO = HOMO
         self.LUMO = LUMO
+        self.phonons = phonons
+        if phonons['real'] is not None and len(phonons['real']) > 0:
+            self.thermal_props = Thermal_properties(np.array([phonons['real']]) * Hartree2eV)
 
     @property
     def energy(self):
@@ -297,7 +302,12 @@ class Output(IonicDynamics):
                     'LUMO': r'\s+LUMO\s*:\s+([-+]?\d*\.\d*)',
                     'F': r'^\s*F\s+=\s+([-+]?\d*\.\d*)',
                     'muN': r'\s+muN\s+=\s+([-+]?\d*\.\d*)',
-                    'G': r'\s+G\s+=\s+([-+]?\d*\.\d*)'}
+                    'G': r'\s+G\s+=\s+([-+]?\d*\.\d*)',
+                    'phonon report': r'(\d+) imaginary modes, (\d+) modes within cutoff, (\d+) real modes',
+                    'zero mode': r'Zero mode \d+:',
+                    'imaginary mode': r'Imaginary mode \d+:',
+                    'real mode': r'Real mode \d+:',
+                    'ionic convergence': r'IonicMinimize: Converged'}
 
         matches = regrep(str(filepath), patterns)
 
@@ -342,31 +352,77 @@ class Output(IonicDynamics):
         lattice[2] = [float(i) for i in data[matches['lattice'][0][1] + 4].split()[1:4]]
         lattice = lattice.T * Bohr2Angstrom
 
-        line_numbers_coords = [int(i[1]) + 1 for i in matches['coords']]
-        coords_hist = np.zeros((len(line_numbers_coords), natoms, 3))
-        species = []
-        atom_number = 0
-        while len(line := data[line_numbers_coords[0] + atom_number].split()) > 0:
-            species += [line[1]]
-            atom_number += 1
-        for i, line_number in enumerate(line_numbers_coords):
+        if matches['coords']:
+            line_numbers = [int(i[1]) + 1 for i in matches['coords']]
+            coords_hist = np.zeros((len(line_numbers), natoms, 3))
+            species = []
             atom_number = 0
-            while len(line := data[line_number + atom_number].split()) > 0:
-                coords_hist[i, atom_number] = [float(line[2]), float(line[3]), float(line[4])]
+            while len(line := data[line_numbers[0] + atom_number].split()) > 0:
+                species += [line[1]]
                 atom_number += 1
+            for i, line_number in enumerate(line_numbers):
+                atom_number = 0
+                while len(line := data[line_number + atom_number].split()) > 0:
+                    coords_hist[i, atom_number] = [float(line[2]), float(line[3]), float(line[4])]
+                    atom_number += 1
 
-        line_numbers_forces = [int(i[1]) + 1 for i in matches['forces']]
-        forces_hist = np.zeros((len(line_numbers_forces), natoms, 3))
-        for i, line_number in enumerate(line_numbers_forces):
-            atom_number = 0
-            while len(line := data[line_number + atom_number].split()) > 0:
-                forces_hist[i, atom_number] = [float(line[2]), float(line[3]), float(line[4])]
-                atom_number += 1
+        if matches['forces']:
+            line_numbers = [int(i[1]) + 1 for i in matches['forces']]
+            forces_hist = np.zeros((len(line_numbers), natoms, 3))
+            for i, line_number in enumerate(line_numbers):
+                atom_number = 0
+                while len(line := data[line_number + atom_number].split()) > 0:
+                    forces_hist[i, atom_number] = [float(line[2]), float(line[3]), float(line[4])]
+                    atom_number += 1
+        else:
+            forces_hist = None
+
+        if not matches['ionic convergence'] and not matches['phonon report']:
+            warnings.warn(f'Ionic Minimization has not been converged! {filepath}')
+
+        if matches['phonon report']:
+            freq_report = {key: int(i) for key, i in zip(['imaginary modes', 'modes within cutoff', 'real modes'],
+                                                         matches['phonon report'][0][0])}
+            if freq_report['modes within cutoff']:
+                line_numbers = [int(i[1]) + 1 for i in matches['zero mode']]
+                zero_mode_freq = np.zeros(freq_report['modes within cutoff'], dtype=complex)
+                for i, line_number in enumerate(line_numbers):
+                    zero_mode_freq[i] = complex(data[line_number].split()[1].replace('i', 'j'))
+            else:
+                zero_mode_freq = []
+
+            if freq_report['imaginary modes']:
+                line_numbers = [int(i[1]) + 1 for i in matches['imaginary mode']]
+                imag_mode_freq = np.zeros(freq_report['imaginary modes'], dtype=complex)
+                for i, line_number in enumerate(line_numbers):
+                    imag_mode_freq[i] = complex(data[line_number].split()[1].replace('i', 'j'))
+            else:
+                imag_mode_freq = []
+
+            if freq_report['real modes']:
+                line_numbers = [int(i[1]) + 1 for i in matches['real mode']]
+                real_mode_freq = np.zeros(freq_report['real modes'])
+                for i, line_number in enumerate(line_numbers):
+                    real_mode_freq[i] = float(data[line_number].split()[1])
+            else:
+                real_mode_freq = []
+
+            phonons = {'zero': zero_mode_freq, 'imag': imag_mode_freq, 'real': real_mode_freq}
+
+            matches = regrep(str(filepath), {'ions': r'ion\s+([a-zA-Z]+)\s+[-+]?\d*\.\d*',
+                                             'coords': r'ion\s+[a-zA-Z]+\s+([-+]?\d*\.\d*)\s+([-+]?\d*\.\d*)\s+([-+]?\d*\.\d*)'})
+            species = [i[0][0] for i in matches['ions']]
+
+            coords_hist = [[[float(i) for i in coord[0]] for coord in matches['coords']]]
+            coords_hist = np.array(coords_hist)
+
+        else:
+            phonons = {'zero': None, 'imag': None, 'real': None}
 
         structure = Structure(lattice, species, coords_hist[-1] * Bohr2Angstrom, coords_are_cartesian=True)
 
         return Output(fft_box_size, energy_ionic_hist, coords_hist, forces_hist, nelec_hist, magnetization_hist,
-                      structure, nbands, nkpts, mu, HOMO, LUMO)
+                      structure, nbands, nkpts, mu, HOMO, LUMO, phonons)
 
     def get_xdatcar(self):
         transform = np.linalg.inv(self.structure.lattice)
