@@ -9,7 +9,6 @@ from subprocess import Popen, PIPE
 from timeit import default_timer as timer
 from datetime import timedelta
 import matplotlib.pyplot as plt
-import re
 import shutil
 import numpy as np
 from nptyping import NDArray, Shape, Number
@@ -19,7 +18,6 @@ class System(TypedDict):
     substrate: str
     adsorbate: str
     idx: int
-    is_pzc: bool
     output: Output
     ddec_nac: AtomicNetCharges
 
@@ -163,29 +161,33 @@ class InfoExtractor:
 
         try:
             substrate, adsorbate, idx, *_ = path_root_folder.name.split('_')
-            if 'vib' in _ or 'bad' in _:
+            if 'bad' in _:
                 return None
-            if '+' in substrate or '-' in substrate:
-                is_pzc = False
-            else:
-                is_pzc = True
+            idx = int(idx)
+            #if '+' in substrate or '-' in substrate:
+            #    is_pzc = False
+            #else:
+            #    is_pzc = True
         except:
-            try:
-                substrate, adsorbate, idx, *_ = path_root_folder.parent.name.split('_')
-                idx = float(path_root_folder.name)
-                if '+' in substrate or '-' in substrate:
-                    is_pzc = False
-                else:
-                    is_pzc = True
-            except:
-                pass
+            pass
+            #try:
+            #    substrate, adsorbate, idx, *_ = path_root_folder.parent.name.split('_')
+            #    idx = int(path_root_folder.name)
+                #if '+' in substrate or '-' in substrate:
+                #    is_pzc = False
+                #else:
+                #    is_pzc = True
+            #except:
+            #    pass
         #else:
         #    raise ValueError(f'Can not extract information from {path_root_folder=}')
 
         output = Output.from_file(path_root_folder / self.output_name)
 
         # Check whether all nessesary files have been already created
-        if not all(i in files for i in ['valence_density.cube', 'POSCAR', 'CONTCAR', 'XDATCAR', 'job_control.txt']) or recreate_files:
+        if not all(i in files for i in ['valence_density.cube',
+                                        'POSCAR', 'CONTCAR', 'XDATCAR',
+                                        'job_control.txt']) or recreate_files:
             print(f'Create necessary files for {path_root_folder}')
 
             fft_box_size = output.fft_box_size
@@ -239,44 +241,46 @@ class InfoExtractor:
                 nbound = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.nbound', fft_box_size, output.structure).convert_to_cube()
                 nbound.to_file(path_root_folder / 'nbound.cube')
 
-            if is_pzc:
-                self.create_job_control(filepath=path_root_folder / 'job_control.txt',
-                                        charge=0.0,
-                                        ddec_params=self.ddec_params)
-            else:
-                substrate_pure = re.split('[-+]', substrate)[0]
-                systems_pzc_ref = [system for system in self.systems if system['substrate'] == substrate_pure and system['adsorbate'] == adsorbate]
-                if len(systems_pzc_ref) == 0:
-                    raise ValueError(f'There is no PZC reference for {path_root_folder}')
-                nelec_arr = [system['output'].nelec for system in systems_pzc_ref]
+            #if is_pzc:
+            #    self.create_job_control(filepath=path_root_folder / 'job_control.txt',
+            #                           charge=0.0,
+            #                           ddec_params=self.ddec_params)
+            #else:
+                #substrate_pure = re.split('[-+]', substrate)[0]
+                #systems_pzc_ref = [system for system in self.systems if system['substrate'] == substrate_pure and system['adsorbate'] == adsorbate]
+                #if len(systems_pzc_ref) == 0:
+                #    raise ValueError(f'There is no PZC reference for {path_root_folder}')
+                #nelec_arr = [system['output'].nelec for system in systems_pzc_ref]
 
-                if not all(nelec == nelec_arr[0] for nelec in nelec_arr):
-                    raise ValueError('There are different number of electrons for PZC systems')
+                #if not all(nelec == nelec_arr[0] for nelec in nelec_arr):
+                #    raise ValueError('There are different number of electrons for PZC systems')
 
-                charge = - (output.nelec_hist[-1] - nelec_arr[0])
-                self.create_job_control(filepath=path_root_folder / 'job_control.txt',
-                                        charge=charge,
-                                        ddec_params=self.ddec_params)
+            charge = - (output.nelec_hist[-1] - output.nelec_pzc)
+            self.create_job_control(filepath=path_root_folder / 'job_control.txt',
+                                    charge=charge,
+                                    ddec_params=self.ddec_params)
 
         if 'DDEC6_even_tempered_net_atomic_charges.xyz' in files:
             ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
-        elif self.do_ddec:
-            print(f'DDEC NACs have not been found in folder {path_root_folder}')
-            print('Run DDEC')
-            start = timer()
-
-            p = Popen(str(self.path_ddec_executable), stdin=PIPE, bufsize=0)
-            p.communicate(str(path_root_folder).encode('ascii'))
-            end = timer()
-            print(f'Done! Elapsed time: {timedelta(seconds=end-start)}')
-            ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
         else:
-            ddec_nac = None
+            files = [file.name for file in path_root_folder.iterdir() if file.is_file()]
+            if self.do_ddec and 'valence_density.cube' in files:
+                print(f'DDEC NACs have not been found in folder {path_root_folder}')
+                print('Run DDEC')
+                start = timer()
+
+                p = Popen(str(self.path_ddec_executable), stdin=PIPE, bufsize=0)
+                p.communicate(str(path_root_folder).encode('ascii'))
+                end = timer()
+                print(f'Done! Elapsed time: {timedelta(seconds=end-start)}')
+                ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
+            else:
+                print(f'Can not run DDEC in folder {path_root_folder}')
+                ddec_nac = None
 
         system: System = {'substrate': substrate,
                           'adsorbate': adsorbate,
-                          'idx': int(idx),
-                          'is_pzc': is_pzc,
+                          'idx': idx,
                           'output': output,
                           'ddec_nac': ddec_nac}
 
