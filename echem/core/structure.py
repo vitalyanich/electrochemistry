@@ -81,6 +81,11 @@ class Structure:
     def natoms(self) -> int:
         return len(self.species)
 
+    @property
+    def natoms_by_type(self) -> dict[str: int]:
+        unique, counts = np.unique(self.species, return_counts=True)
+        return {i: j for i, j in zip(unique, counts)}
+
     def mod_add_atoms(self, coords, species) -> None:
         """
         Adds atoms in the Structure
