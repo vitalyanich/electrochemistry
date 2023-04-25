@@ -221,8 +221,7 @@ class Output(IonicDynamics):
                  mu: float,
                  HOMO: float,
                  LUMO: float,
-                 phonons: dict,
-                 pseudopots: dict):
+                 phonons: dict):
         super(Output, self).__init__(forces_hist)
         self.fft_box_size = fft_box_size
         self.energy_ionic_hist = energy_ionic_hist
@@ -236,7 +235,6 @@ class Output(IonicDynamics):
         self.HOMO = HOMO
         self.LUMO = LUMO
         self.phonons = phonons
-        self.pseudopots = pseudopots
         if phonons['real'] is not None and len(phonons['real']) > 0:
             self.thermal_props = Thermal_properties(np.array([phonons['real']]) * Hartree2eV)
 
@@ -254,10 +252,6 @@ class Output(IonicDynamics):
     @property
     def nelec(self):
         return self.nelec_hist[-1]
-
-    @property
-    def nelec_pzc(self):
-        return np.sum([self.structure.natoms_by_type[key] * self.pseudopots[key] for key in self.pseudopots.keys()])
 
     @property
     def magnetization_abs(self):
@@ -285,7 +279,7 @@ class Output(IonicDynamics):
         if isinstance(filepath, str):
             filepath = Path(filepath)
 
-        # \TODO Non-Cartesin coods case is not implemented
+        # \TODO Non-Cartesin coods case is not imptemented
 
         file = open(filepath, 'r')
         data = file.readlines()
@@ -313,9 +307,7 @@ class Output(IonicDynamics):
                     'zero mode': r'Zero mode \d+:',
                     'imaginary mode': r'Imaginary mode \d+:',
                     'real mode': r'Real mode \d+:',
-                    'ionic convergence': r'IonicMinimize: Converged',
-                    'pseudopots': r'\s*Title:\s+([a-zA-Z0-9]*).',
-                    'valence_elecs': r'(\d+) valence electrons in orbitals'}
+                    'ionic convergence': r'IonicMinimize: Converged'}
 
         matches = regrep(str(filepath), patterns)
 
@@ -429,10 +421,8 @@ class Output(IonicDynamics):
 
         structure = Structure(lattice, species, coords_hist[-1] * Bohr2Angstrom, coords_are_cartesian=True)
 
-        pseudopots = {i[0][0]: int(j[0][0]) for i, j in zip(matches['pseudopots'], matches['valence_elecs'])}
-
         return Output(fft_box_size, energy_ionic_hist, coords_hist, forces_hist, nelec_hist, magnetization_hist,
-                      structure, nbands, nkpts, mu, HOMO, LUMO, phonons, pseudopots)
+                      structure, nbands, nkpts, mu, HOMO, LUMO, phonons)
 
     def get_xdatcar(self):
         transform = np.linalg.inv(self.structure.lattice)
