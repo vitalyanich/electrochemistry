@@ -12,7 +12,7 @@ from typing_extensions import NotRequired
 from pathlib import Path
 import warnings
 import copy
-from nptyping import NDArray, Shape, Number
+from nptyping import NDArray, Shape, Number, Complex, Float
 
 
 class Lattice:
@@ -211,16 +211,16 @@ class Output(IonicDynamics):
     def __init__(self,
                  fft_box_size: NDArray[Shape['3'], Number],
                  energy_ionic_hist: EnergyIonicHist,
-                 coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number] | None,
+                 coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  forces_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number] | None,
                  nelec_hist: np.ndarray,
                  magnetization_hist: NDArray[Shape['Nesteps, 2'], Number] | None,
                  structure: Structure,
                  nbands: int,
                  nkpts: int,
-                 mu: float,
-                 HOMO: float,
-                 LUMO: float,
+                 mu: float | None,
+                 HOMO: float | None,
+                 LUMO: float | None,
                  phonons: dict,
                  pseudopots: dict):
         super(Output, self).__init__(forces_hist)
@@ -315,7 +315,8 @@ class Output(IonicDynamics):
                     'real mode': r'Real mode \d+:',
                     'ionic convergence': r'IonicMinimize: Converged',
                     'pseudopots': r'\s*Title:\s+([a-zA-Z0-9]*).',
-                    'valence_elecs': r'(\d+) valence electrons in orbitals'}
+                    'valence_elecs': r'(\d+) valence electrons in orbitals',
+                    'phonon_perturbations': r'\s+Perturbation:\s+\d+\s+nStates:\s+(\d+)'}
 
         matches = regrep(str(filepath), patterns)
 
@@ -330,28 +331,43 @@ class Output(IonicDynamics):
 
         natoms = int(matches['natoms'][0][0][0])
         nbands = int(matches['nbands'][0][0][0])
+
+        phonons = {}
+
+        if matches['phonon_perturbations']:
+            nstates = [int(i[0][0]) for i in matches['phonon_perturbations']]
+            phonons['nStates'] = np.array(nstates)
+        else:
+            phonons['nStates'] = None
+
         if bool(matches['is_kpts_irreducable']):
             nkpts = int(matches['nkpts_folded'][0][0][0])
         else:
             nkpts = int(matches['nkpts'][0][0][0])
         if bool(matches['mu']):
             mu = float(matches['mu'][0][0][0])
-        else:
+        elif matches['mu_hist']:
             mu = float(matches['mu_hist'][-1][0][0])
+        else:
+            mu = None
+
         if bool(matches['HOMO']):
             HOMO = float(matches['HOMO'][0][0][0])
         else:
             HOMO = None
+
         if bool(matches['LUMO']):
             LUMO = float(matches['LUMO'][0][0][0])
         else:
             LUMO = None
+
         if bool(matches['magnetization']):
             magnetization_hist = np.zeros((len(matches['magnetization']), 2))
             for i, mag in enumerate(matches['magnetization']):
                 magnetization_hist[i] = [float(mag[0][0]), float(mag[0][1])]
         else:
             magnetization_hist = None
+
         fft_box_size = np.array([int(i) for i in matches['fft_box_size'][0][0][0].split()])
 
         lattice = np.zeros((3, 3))
@@ -359,20 +375,6 @@ class Output(IonicDynamics):
         lattice[1] = [float(i) for i in data[matches['lattice'][0][1] + 3].split()[1:4]]
         lattice[2] = [float(i) for i in data[matches['lattice'][0][1] + 4].split()[1:4]]
         lattice = lattice.T * Bohr2Angstrom
-
-        if matches['coords']:
-            line_numbers = [int(i[1]) + 1 for i in matches['coords']]
-            coords_hist = np.zeros((len(line_numbers), natoms, 3))
-            species = []
-            atom_number = 0
-            while len(line := data[line_numbers[0] + atom_number].split()) > 0:
-                species += [line[1]]
-                atom_number += 1
-            for i, line_number in enumerate(line_numbers):
-                atom_number = 0
-                while len(line := data[line_number + atom_number].split()) > 0:
-                    coords_hist[i, atom_number] = [float(line[2]), float(line[3]), float(line[4])]
-                    atom_number += 1
 
         if matches['forces']:
             line_numbers = [int(i[1]) + 1 for i in matches['forces']]
@@ -384,9 +386,6 @@ class Output(IonicDynamics):
                     atom_number += 1
         else:
             forces_hist = None
-
-        if not matches['ionic convergence'] and not matches['phonon report']:
-            warnings.warn(f'Ionic Minimization has not been converged! {filepath}')
 
         if matches['phonon report']:
             freq_report = {key: int(i) for key, i in zip(['imaginary modes', 'modes within cutoff', 'real modes'],
@@ -415,17 +414,34 @@ class Output(IonicDynamics):
             else:
                 real_mode_freq = []
 
-            phonons = {'zero': zero_mode_freq, 'imag': imag_mode_freq, 'real': real_mode_freq}
+            phonons['zero'] = zero_mode_freq
+            phonons['imag'] = imag_mode_freq
+            phonons['real'] = real_mode_freq
+        else:
+            phonons['zero'] = None
+            phonons['imag'] = None
+            phonons['real'] = None
 
+        if matches['coords']:
+            line_numbers = [int(i[1]) + 1 for i in matches['coords']]
+            coords_hist = np.zeros((len(line_numbers), natoms, 3))
+            species = []
+            atom_number = 0
+            while len(line := data[line_numbers[0] + atom_number].split()) > 0:
+                species += [line[1]]
+                atom_number += 1
+            for i, line_number in enumerate(line_numbers):
+                atom_number = 0
+                while len(line := data[line_number + atom_number].split()) > 0:
+                    coords_hist[i, atom_number] = [float(line[2]), float(line[3]), float(line[4])]
+                    atom_number += 1
+        else:
             matches = regrep(str(filepath), {'ions': r'ion\s+([a-zA-Z]+)\s+[-+]?\d*\.\d*',
                                              'coords': r'ion\s+[a-zA-Z]+\s+([-+]?\d*\.\d*)\s+([-+]?\d*\.\d*)\s+([-+]?\d*\.\d*)'})
             species = [i[0][0] for i in matches['ions']]
 
             coords_hist = [[[float(i) for i in coord[0]] for coord in matches['coords']]]
             coords_hist = np.array(coords_hist)
-
-        else:
-            phonons = {'zero': None, 'imag': None, 'real': None}
 
         structure = Structure(lattice, species, coords_hist[-1] * Bohr2Angstrom, coords_are_cartesian=True)
 

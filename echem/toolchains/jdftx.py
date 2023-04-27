@@ -33,18 +33,25 @@ class DDEC_params(TypedDict):
     number_of_core_electrons: NotRequired[list[list[int]]]
 
 
+class SBATCH_phonon(TypedDict):
+    main_text: NotRequired[str]
+    path_executable: Required[str]
+
+
 class InfoExtractor:
     def __init__(self,
-                 ddec_params: DDEC_params,
+                 ddec_params: DDEC_params = None,
+                 sbatch_phonon: SBATCH_phonon = None,
                  systems: list[System] = None,
                  output_name: str = 'output.out',
                  jdftx_prefix: str = 'jdft',
                  do_ddec: bool = False):
 
-        if 'path_ddec_executable' in ddec_params:
-            self.path_ddec_executable = ddec_params['path_ddec_executable']
+        if ddec_params is not None:
+            if do_ddec and 'path_ddec_executable' not in ddec_params:
+                raise ValueError('"path_ddec_executable" must be specified in ddec_params if do_ddec=True')
         elif do_ddec:
-            raise ValueError('"path_ddec_executable" must be specified in ddec_params if do_ddec=True')
+            raise ValueError('"ddec_params" mist be specified if do_ddec=True')
 
         if systems is None:
             self.systems = []
@@ -53,6 +60,7 @@ class InfoExtractor:
         self.jdftx_prefix = jdftx_prefix
         self.do_ddec = do_ddec
         self.ddec_params = ddec_params
+        self.sbatch_phonon = sbatch_phonon
 
     def create_job_control(self,
                            filepath: str | Path,
@@ -163,13 +171,13 @@ class InfoExtractor:
         substrate, adsorbate, idx, *_ = path_root_folder.name.split('_')
         idx = int(idx)
         if 'vib' in _:
-            is_phonon = True
+            is_vib_folder = True
         else:
-            is_phonon = False
+            is_vib_folder = False
         if 'bad' in _:
             return None
 
-        if is_phonon:
+        if is_vib_folder:
             output_phonons = Output.from_file(path_root_folder / self.output_name)
             output = None
         else:
@@ -177,11 +185,9 @@ class InfoExtractor:
             output_phonons = None
 
         # Check whether all necessary files have been already created
-        if not is_phonon \
-                and not all(i in files for i in ['valence_density.cube',
-                                                 'POSCAR', 'CONTCAR', 'XDATCAR',
-                                                 'job_control.txt']) \
-                or recreate_files:
+        if not is_vib_folder:
+            if not all(i in files for i in ['valence_density.cube',
+                                            'POSCAR', 'CONTCAR', 'XDATCAR']) or recreate_files:
                 print(f'Create necessary files for {path_root_folder}')
 
                 fft_box_size = output.fft_box_size
@@ -195,10 +201,10 @@ class InfoExtractor:
                 xdatcar = output.get_xdatcar()
                 xdatcar.to_file(path_root_folder / 'XDATCAR')
 
-                if 'output_fft.out' in files:
-                    files.remove('output_fft.out')
+                if 'output_volumetric.out' in files:
+                    files.remove('output_volumetric.out')
                     patterns = {'fft_box_size': r'Chosen fftbox size, S = \[(\s+\d+\s+\d+\s+\d+\s+)\]'}
-                    matches = regrep(str(path_root_folder / 'output_fft.out'), patterns)
+                    matches = regrep(str(path_root_folder / 'output_volumetric.out'), patterns)
                     fft_box_size = np.array([int(i) for i in matches['fft_box_size'][0][0][0].split()])
 
                 if f'{self.jdftx_prefix}.n_up' in files and f'{self.jdftx_prefix}.n_dn' in files:
@@ -236,29 +242,51 @@ class InfoExtractor:
                                                       fft_box_size, output.structure).convert_to_cube()
                     nbound.to_file(path_root_folder / 'nbound.cube')
 
+            if self.ddec_params is not None and ('job_control.txt' not in files or recreate_files):
+                print(f'Create job_control.txt for {path_root_folder}')
                 charge = - (output.nelec_hist[-1] - output.nelec_pzc)
                 self.create_job_control(filepath=path_root_folder / 'job_control.txt',
                                         charge=charge,
                                         ddec_params=self.ddec_params)
 
-        if 'DDEC6_even_tempered_net_atomic_charges.xyz' in files:
-            ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
-        elif self.do_ddec:
-            print(f'DDEC NACs have not been found in folder {path_root_folder}')
-            print('Run DDEC')
-            start = timer()
+            if 'DDEC6_even_tempered_net_atomic_charges.xyz' in files:
+                ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
+            elif self.ddec_params is not None and self.do_ddec:
+                print(f'DDEC NACs have not been found in folder {path_root_folder}')
+                print('Run DDEC')
+                start = timer()
 
-            p = Popen(str(self.path_ddec_executable), stdin=PIPE, bufsize=0)
-            p.communicate(str(path_root_folder).encode('ascii'))
-            end = timer()
-            print(f'Done! Elapsed time: {timedelta(seconds=end-start)}')
-            ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
+                p = Popen(str(self.ddec_params['path_ddec_executable']), stdin=PIPE, bufsize=0)
+                p.communicate(str(path_root_folder).encode('ascii'))
+                end = timer()
+                print(f'Done! Elapsed time: {timedelta(seconds=end-start)}')
+                ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
+            else:
+                ddec_nac = None
+
+            if 'output_phonon_dry.out' in files:
+                output_phonons = Output.from_file(path_root_folder / 'output_phonon_dry.out')
+                if self.sbatch_phonon is not None:
+                    file = open(path_root_folder / 'run_phonon.sh', 'w')
+                    file.write('#!/bin/sh\n\n')
+                    file.write(self.sbatch_phonon['main_text'])
+                    file.write('\n')
+                    for i, nstate in enumerate(output_phonons.phonons['nStates']):
+                        file.write(f'export nStates="{nstate}"\n')
+                        file.write(f'export iPert="{i + 1}"\n')
+                        file.write('#SBATCH -n {$nStates}\n')
+                        file.write(f'srun {self.sbatch_phonon["path_executable"]}' +
+                                   '-i input_phonon.in -o output_phonon_{$iPert}.out\n\n')
+                    file.close()
         else:
             ddec_nac = None
 
         system_proccessed = self.get_system(substrate, adsorbate, idx)
         if len(system_proccessed) == 1:
-            if is_phonon:
+            if is_vib_folder:
+                system_proccessed[0]['output_phonons'] = output_phonons
+                system_proccessed[0]['output_phonons'] = output_phonons
+            elif output_phonons is not None:
                 system_proccessed[0]['output_phonons'] = output_phonons
             else:
                 system_proccessed[0]['output'] = output
@@ -268,7 +296,6 @@ class InfoExtractor:
             system: System = {'substrate': substrate,
                               'adsorbate': adsorbate,
                               'idx': idx,
-                              'is_pzc': is_pzc,
                               'output': output,
                               'ddec_nac': ddec_nac,
                               'output_phonons': output_phonons}
