@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import shutil
 import numpy as np
 from nptyping import NDArray, Shape, Number
+from tqdm.autonotebook import tqdm
 
 
 class System(TypedDict):
@@ -151,13 +152,14 @@ class InfoExtractor:
         depth = max([len(f.parents) for f in subfolders])
         subfolders = [f for f in subfolders if len(f.parents) == depth]
 
-        subfolders_PZC = [folder for folder in subfolders if 'PZC' in folder.parent.name]
-        subfolders = [folder for folder in subfolders if 'PZC' not in folder.parent.name]
+        #subfolders_PZC = [folder for folder in subfolders if 'PZC' in folder.parent.name]
+        #subfolders = [folder for folder in subfolders if 'PZC' not in folder.parent.name]
 
-        for folder in subfolders_PZC:
+        pbar = tqdm(subfolders)
+        for folder in pbar:
             self.get_info(folder, recreate_files)
-        for folder in subfolders:
-            self.get_info(folder, recreate_files)
+        #for folder in subfolders:
+        #    self.get_info(folder, recreate_files)
 
     def get_info(self,
                  path_root_folder: str | Path,
