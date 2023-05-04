@@ -3,7 +3,7 @@ from nptyping import NDArray, Shape, Number
 import warnings
 
 
-class Thermal_properties:
+class ThermalProperties:
     """
     Class for calculation thermal properties based on the calculated phonon spectra
 
@@ -76,3 +76,6 @@ class Thermal_properties:
         second_term = - np.sum(self.weights * k_B * T * np.nan_to_num(np.log(1 - np.exp(- self.eigen_freq / (k_B * T))),
                                                                       neginf=0))
         return self.get_E_temp(T) + second_term
+
+    def get_E_tot(self, T) -> float:
+        return self.get_E_zpe() + self.get_E_temp(T) - self.get_TS(T)

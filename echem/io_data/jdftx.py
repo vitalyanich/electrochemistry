@@ -4,7 +4,7 @@ from echem.core.structure import Structure
 from echem.core.constants import Bohr2Angstrom, Hartree2eV, eV2Hartree
 from echem.core.ionic_dynamics import IonicDynamics
 from echem.core.electronic_structure import EBS
-from echem.core.thermal_properties import Thermal_properties
+from echem.core.thermalproperties import ThermalProperties
 from echem.io_data import vasp
 from echem.io_data.universal import Cube
 from typing import Union, Literal, TypedDict
@@ -238,7 +238,7 @@ class Output(IonicDynamics):
         self.phonons = phonons
         self.pseudopots = pseudopots
         if phonons['real'] is not None and len(phonons['real']) > 0:
-            self.thermal_props = Thermal_properties(np.array([phonons['real']]) * Hartree2eV)
+            self.thermal_props = ThermalProperties(np.array([phonons['real']]) * Hartree2eV)
 
     @property
     def energy(self):

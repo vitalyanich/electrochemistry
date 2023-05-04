@@ -6,14 +6,14 @@ from echem.io_data.jdftx import Ionpos, Lattice
 from echem.io_data.vasp import Poscar
 from echem.core.structure import Structure
 from echem.core.constants import THz2eV
-from echem.core.thermal_properties import Thermal_properties
+from echem.core.thermalproperties import ThermalProperties
 from InterPhon.core import PreProcess, PostProcess
 from nptyping import NDArray, Shape, Number
 from typing import Union
 from pathlib import Path
 
 
-class InterPhonInterface(Thermal_properties):
+class InterPhonInterface(ThermalProperties):
     def __init__(self,
                  folder_to_jdftx_files: Union[str, Path],
                  folder_files_to_copy: Union[str, Path] = None,
@@ -172,7 +172,7 @@ class InterPhonInterface(Thermal_properties):
         post_process.eval_phonon()
 
         self.post_process = post_process
-        Thermal_properties.__init__(self, self.post_process.w_q * THz2eV)
+        ThermalProperties.__init__(self, self.post_process.w_q * THz2eV)
 
     def create_displacements_jdftx(self):
         self._create_poscar_for_interphon(folder_to_jdftx_files=self.folder_to_jdftx_files,
@@ -202,7 +202,7 @@ class InterPhonInterface(Thermal_properties):
                                    filepath_kpoints=self.folder_to_jdftx_files / 'KPOINTS',
                                    user_args=self.user_args,
                                    sym_flag=self.sym_flag)
-        return Thermal_properties.get_E_zpe(self)
+        return ThermalProperties.get_E_zpe(self)
 
     def get_E_temp(self,
                    T: float) -> float:
@@ -213,7 +213,7 @@ class InterPhonInterface(Thermal_properties):
                                    filepath_kpoints=self.folder_to_jdftx_files / 'KPOINTS',
                                    user_args=self.user_args,
                                    sym_flag=self.sym_flag)
-        return Thermal_properties.get_E_temp(self, T)
+        return ThermalProperties.get_E_temp(self, T)
 
     def get_TS(self,
                T: float) -> float:
@@ -224,4 +224,4 @@ class InterPhonInterface(Thermal_properties):
                                    filepath_kpoints=self.folder_to_jdftx_files / 'KPOINTS',
                                    user_args=self.user_args,
                                    sym_flag=self.sym_flag)
-        return Thermal_properties.get_TS(self, T)
+        return ThermalProperties.get_TS(self, T)
