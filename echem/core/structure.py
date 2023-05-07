@@ -1,10 +1,11 @@
 import numpy as np
 from typing import Union, List, Sequence, Iterable
+from termcolor import colored
 
 
 class Structure:
     """
-    Basic class for structure of unit/super cell.
+    Basic class for structure of unit/supercell.
     Args:
         lattice: 2D array that contains lattice vectors. Each row should correspond to a lattice vector.
             E.g., [[5, 5, 0], [7, 4, 0], [0, 0, 25]].
@@ -74,8 +75,16 @@ class Structure:
 
     def __eq__(self, other):
         assert isinstance(other, Structure), 'Other object must belong to Structure class'
-        return np.array_equal(self.lattice, other.lattice) and (self.species == other.species) and \
-               np.array_equal(self.coords, other.coords) and (self.coords_are_cartesian == other.coords_are_cartesian)
+        if not self.coords_are_cartesian == other.coords_are_cartesian:
+            if self.coords_are_cartesian:
+                other.mod_coords_to_cartesian()
+                print(colored('Coords of other were modded into Cartesian', color='green'))
+            else:
+                other.mod_coords_to_direct()
+                print(colored('Coords of other were modded into Direct', color='green'))
+        return np.allclose(self.lattice, other.lattice, atol=1e-14, rtol=1e-14) and \
+            (self.species == other.species) and \
+            np.allclose(self.coords, other.coords, atol=1e-14, rtol=1e-14)
 
     @property
     def natoms(self) -> int:

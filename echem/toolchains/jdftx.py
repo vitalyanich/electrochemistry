@@ -3,7 +3,7 @@ from pathlib import Path
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos
 from echem.io_data.ddec import AtomicNetCharges
-from echem.core.constants import Hartree2eV, Bohr2Angstrom, Angstrom2Bohr
+from echem.core.constants import Hartree2eV, eV2Hartree, Bohr2Angstrom, Angstrom2Bohr
 from monty.re import regrep
 from subprocess import Popen, PIPE
 from timeit import default_timer as timer
@@ -12,7 +12,9 @@ import matplotlib.pyplot as plt
 import shutil
 import numpy as np
 from nptyping import NDArray, Shape, Number
+from typing import Literal
 from tqdm.autonotebook import tqdm
+from termcolor import colored
 
 
 class System(TypedDict):
@@ -142,9 +144,18 @@ class InfoExtractor:
 
         job_control.close()
 
+    def check_out_outvib_sameness(self):
+        for system in self.systems:
+            if system['output'] is not None and system['output_phonons'] is not None:
+                if not system['output'].structure == system['output_phonons'].structure:
+                    print(colored('System:', color='red'),
+                          colored(' '.join((system['substrate'], system['adsorbate'], str(system['idx']))),
+                                  color='red', attrs=['bold']),
+                          colored('has output and phonon output for different systems'))
+
     def get_info_multiple(self,
                           path_root_folder: str | Path,
-                          recreate_files: bool = False):
+                          recreate_files: bool = False) -> None:
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
 
@@ -152,18 +163,13 @@ class InfoExtractor:
         depth = max([len(f.parents) for f in subfolders])
         subfolders = [f for f in subfolders if len(f.parents) == depth]
 
-        #subfolders_PZC = [folder for folder in subfolders if 'PZC' in folder.parent.name]
-        #subfolders = [folder for folder in subfolders if 'PZC' not in folder.parent.name]
-
         pbar = tqdm(subfolders)
         for folder in pbar:
             self.get_info(folder, recreate_files)
-        #for folder in subfolders:
-        #    self.get_info(folder, recreate_files)
 
     def get_info(self,
                  path_root_folder: str | Path,
-                 recreate_files: bool = False):
+                 recreate_files: bool = False) -> None:
 
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
@@ -181,8 +187,9 @@ class InfoExtractor:
 
         if is_vib_folder:
             output_phonons = Output.from_file(path_root_folder / self.output_name)
-            if any(output_phonons.phonons['zero'] > 1e-5) or any(np.abs(output_phonons.phonons['imag']) > 1e-5):
-                print(path_root_folder)
+            if (any(output_phonons.phonons['zero']) and any(output_phonons.phonons['zero'] > 1e-5)) or \
+                    (any(output_phonons.phonons['imag']) and any(np.abs(output_phonons.phonons['imag']) > 1e-5)):
+                print(colored(str(path_root_folder), color='green', attrs=['bold']))
                 if len(output_phonons.phonons["zero"]):
                     print(f'{len(output_phonons.phonons["zero"])} zero modes: {output_phonons.phonons["zero"]}')
                 if len(output_phonons.phonons["imag"]):
@@ -196,7 +203,7 @@ class InfoExtractor:
         if not is_vib_folder:
             if not all(i in files for i in ['valence_density.cube',
                                             'POSCAR', 'CONTCAR', 'XDATCAR']) or recreate_files:
-                print(f'Create necessary files for {path_root_folder}')
+                print('Create necessary files for', colored(str(path_root_folder), attrs=['bold']))
 
                 fft_box_size = output.fft_box_size
 
@@ -251,7 +258,7 @@ class InfoExtractor:
                     nbound.to_file(path_root_folder / 'nbound.cube')
 
             if self.ddec_params is not None and ('job_control.txt' not in files or recreate_files):
-                print(f'Create job_control.txt for {path_root_folder}')
+                print('Create job_control.txt for', colored(str(path_root_folder), attrs=['bold']))
                 charge = - (output.nelec_hist[-1] - output.nelec_pzc)
                 self.create_job_control(filepath=path_root_folder / 'job_control.txt',
                                         charge=charge,
@@ -260,7 +267,7 @@ class InfoExtractor:
             if 'DDEC6_even_tempered_net_atomic_charges.xyz' in files:
                 ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
             elif self.ddec_params is not None and self.do_ddec:
-                print(f'DDEC NACs have not been found in folder {path_root_folder}')
+                print('DDEC NACs have not been found in folder', colored(str(path_root_folder), attrs=['bold']))
                 print('Run DDEC')
                 start = timer()
 
@@ -314,7 +321,7 @@ class InfoExtractor:
                              f'However there are {len(system_proccessed)} systems copies of following system: '
                              f'{substrate=}, {adsorbate=}, {idx=}')
 
-    def get_system(self, substrate: str, adsorbate: str, idx: int = None):
+    def get_system(self, substrate: str, adsorbate: str, idx: int = None) -> list[System]:
         if idx is None:
             return [system for system in self.systems if
                     system['substrate'] == substrate and system['adsorbate'] == adsorbate]
@@ -322,17 +329,61 @@ class InfoExtractor:
             return [system for system in self.systems if
                     system['substrate'] == substrate and system['adsorbate'] == adsorbate and system['idx'] == idx]
 
-    def get_F(self, substrate: str, adsorbate: str, idx: int):
-        return self.get_system(substrate, adsorbate, idx)[0]['output'].energy_ionic_hist['F'][-1]
+    def get_F(self, substrate: str, adsorbate: str, idx: int,
+              units: Literal['eV', 'Ha'] = 'eV',
+              T: float | int = None) -> float:
 
-    def get_G(self, substrate: str, adsorbate: str, idx: int):
-        return self.get_system(substrate, adsorbate, idx)[0]['output'].energy_ionic_hist['G'][-1]
+        if T is None:
+            E = self.get_system(substrate, adsorbate, idx)[0]['output'].energy_ionic_hist['F'][-1]
+            if units == 'Ha':
+                return E
+            elif units == 'eV':
+                return E * Hartree2eV
+            else:
+                raise ValueError(f'units should be "Ha" or "eV" however "{units}" was given')
+        elif isinstance(T, float | int):
+            E = self.get_system(substrate, adsorbate, idx)[0]['output'].energy_ionic_hist['F'][-1]
+            E_vib = self.get_E_vib_tot(substrate, adsorbate, idx, T)
+            if units == 'Ha':
+                return E + E_vib * eV2Hartree
+            elif units == 'eV':
+                return E * Hartree2eV + E_vib
+            else:
+                raise ValueError(f'units should be "Ha" or "eV" however "{units}" was given')
+        else:
+            raise ValueError(f'T should be None, float or int, but {type(T)} was given')
 
-    def get_N(self, substrate: str, adsorbate: str, idx: int):
+    def get_G(self, substrate: str, adsorbate: str, idx: int,
+              units: Literal['eV', 'Ha'] = 'eV',
+              T: float | int = None) -> float:
+        if T is None:
+            E = self.get_system(substrate, adsorbate, idx)[0]['output'].energy_ionic_hist['G'][-1]
+            if units == 'Ha':
+                return E
+            elif units == 'eV':
+                return E * Hartree2eV
+            else:
+                raise ValueError(f'units should be "Ha" or "eV" however "{units}" was given')
+        elif isinstance(T, float | int):
+            E = self.get_system(substrate, adsorbate, idx)[0]['output'].energy_ionic_hist['G'][-1]
+            E_vib = self.get_E_vib_tot(substrate, adsorbate, idx, T)
+            if units == 'Ha':
+                return E + E_vib * eV2Hartree
+            elif units == 'eV':
+                return E * Hartree2eV + E_vib
+            else:
+                raise ValueError(f'units should be "Ha" or "eV" however "{units}" was given')
+        else:
+            raise ValueError(f'T should be None, float or int, but {type(T)} was given')
+
+    def get_N(self, substrate: str, adsorbate: str, idx: int) -> float:
         return self.get_system(substrate, adsorbate, idx)[0]['output'].nelec
 
-    def get_mu(self, substrate: str, adsorbate: str, idx: int):
+    def get_mu(self, substrate: str, adsorbate: str, idx: int) -> float:
         return self.get_system(substrate, adsorbate, idx)[0]['output'].mu
+
+    def get_E_vib_tot(self, substrate: str, adsorbate: str, idx: int, T: float) -> float:
+        return self.get_system(substrate, adsorbate, idx)[0]['output_phonons'].thermal_props.get_E_tot(T)
 
     def plot_energy(self, substrate: str, adsorbate: str):
 

@@ -1,10 +1,11 @@
 import numpy as np
+import re
 from monty.re import regrep
 from echem.core.structure import Structure
 from echem.core.constants import Bohr2Angstrom, Hartree2eV, eV2Hartree
 from echem.core.ionic_dynamics import IonicDynamics
 from echem.core.electronic_structure import EBS
-from echem.core.thermalproperties import ThermalProperties
+from echem.core.thermal_properties import ThermalProperties
 from echem.io_data import vasp
 from echem.io_data.universal import Cube
 from typing import Union, Literal, TypedDict
@@ -13,6 +14,7 @@ from pathlib import Path
 import warnings
 import copy
 from nptyping import NDArray, Shape, Number, Complex, Float
+from termcolor import colored
 
 
 class Lattice:
@@ -221,7 +223,7 @@ class Output(IonicDynamics):
                  mu: float | None,
                  HOMO: float | None,
                  LUMO: float | None,
-                 phonons: dict,
+                 phonons: dict[Literal['real', 'imag', 'zero', 'nStates'], np.ndarray | None],
                  pseudopots: dict):
         super(Output, self).__init__(forces_hist)
         self.fft_box_size = fft_box_size
@@ -241,40 +243,40 @@ class Output(IonicDynamics):
             self.thermal_props = ThermalProperties(np.array([phonons['real']]) * Hartree2eV)
 
     @property
-    def energy(self):
+    def energy(self) -> float:
         if 'G' in self.energy_ionic_hist.keys():
             return self.energy_ionic_hist['G'][-1]
         else:
             return self.energy_ionic_hist['F'][-1]
 
     @property
-    def nisteps(self):
+    def nisteps(self) -> int:
         return len(self.energy_ionic_hist['F'])
 
     @property
-    def nelec(self):
+    def nelec(self) -> float:
         return self.nelec_hist[-1]
 
     @property
-    def nelec_pzc(self):
+    def nelec_pzc(self) -> int:
         return np.sum([self.structure.natoms_by_type[key] * self.pseudopots[key] for key in self.pseudopots.keys()])
 
     @property
-    def magnetization_abs(self):
+    def magnetization_abs(self) -> float:
         if self.magnetization_hist is None:
             raise ValueError('It is non-spin-polarized calculation')
         else:
             return self.magnetization_hist[-1, 0]
 
     @property
-    def magnetization_tot(self):
+    def magnetization_tot(self) -> float:
         if self.magnetization_hist is None:
             raise ValueError('It is non-spin-polarized calculation')
         else:
             return self.magnetization_hist[-1, 1]
 
     @property
-    def nspin(self):
+    def nspin(self) -> int:
         if self.magnetization_hist is None:
             return 1
         else:
@@ -450,18 +452,31 @@ class Output(IonicDynamics):
         return Output(fft_box_size, energy_ionic_hist, coords_hist, forces_hist, nelec_hist, magnetization_hist,
                       structure, nbands, nkpts, mu, HOMO, LUMO, phonons, pseudopots)
 
-    def get_xdatcar(self):
+    def get_xdatcar(self) -> vasp.Xdatcar:
         transform = np.linalg.inv(self.structure.lattice)
         return vasp.Xdatcar(structure=self.structure,
                             trajectory=np.matmul(self.coords_hist * Bohr2Angstrom, transform))
 
-    def get_poscar(self):
+    def get_poscar(self) -> vasp.Poscar:
         structure = copy.copy(self.structure)
         structure.coords = self.coords_hist[0] * Bohr2Angstrom
         return vasp.Poscar(structure=structure)
 
-    def get_contcar(self):
+    def get_contcar(self) -> vasp.Poscar:
         return vasp.Poscar(structure=self.structure)
+
+    def mod_phonon_zero2real(self) -> None:
+        if self.phonons['zero'] is not None:
+            idx = self.phonons['zero'].imag == 0
+            invidx = np.invert(idx)
+            if any(invidx):
+                print(colored('The following values can not be converted to real:', color='red', attrs=['bold']),
+                      self.phonons['zero'][invidx])
+            mods_for_transfer = np.sort(self.phonons['zero'][idx].real)
+            self.phonons['real'] = np.hstack((mods_for_transfer, self.phonons['real']))
+            self.phonons['zero'] = self.phonons['zero'][invidx]
+        else:
+            print(colored('There are no zero phonons', color='red', attrs=['bold']))
 
 
 class EBS_data:
@@ -627,11 +642,11 @@ class BandProjections:
 
     @property
     def nbands(self):
-        return self.proj_coeffs.shape[3]
+        return self.proj_coeffs.shape[2]
 
     @property
     def norbs(self):
-        return self.proj_coeffs.shape[4]
+        return self.proj_coeffs.shape[3]
 
     @staticmethod
     def from_file(filepath: str | Path):
@@ -663,12 +678,12 @@ class BandProjections:
         start_lines = []
         for i, match in enumerate(matches['x']):
             start_lines.append(int(match[1]))
-            weights[i] = float(data[int(match[1])].split()[7])
+            weights[i] = float(re.sub(r'[^0-9.]', '', data[int(match[1])].split()[7]))
 
-        if not np.array_equal(weights[:len(weights) // 2], weights[len(weights) // 2:]):
+        if nspin == 2 and not np.array_equal(weights[:len(weights) // 2], weights[len(weights) // 2:]):
             raise ValueError(f'Kpts weights can not be correctly split {weights=}')
-
-        weights = weights[:len(weights) // 2]
+        if nspin == 2:
+            weights = weights[:len(weights) // 2]
 
         species = []
         norbs_per_atomtype = {}

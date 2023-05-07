@@ -6,7 +6,7 @@ from echem.io_data.jdftx import Ionpos, Lattice
 from echem.io_data.vasp import Poscar
 from echem.core.structure import Structure
 from echem.core.constants import THz2eV
-from echem.core.thermalproperties import ThermalProperties
+from echem.core.thermal_properties import ThermalProperties
 from InterPhon.core import PreProcess, PostProcess
 from nptyping import NDArray, Shape, Number
 from typing import Union
