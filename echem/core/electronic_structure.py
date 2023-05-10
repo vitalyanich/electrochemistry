@@ -94,12 +94,12 @@ class EBS:
             zero_at_fermi (bool, optional): if True Fermi energy will be equal to zero
             emin (float, optional): minimum value in DOS calculation.
             emax (float, optional): maximum value in DOS calculation.
-            smearing (str, optional): define whether will be used smearing or not. Default value is 'Gaussian'.
+            smearing (str, optional): define whether you will be used smearing or not. Default value is 'Gaussian'.
             Possible options: 'gaussian'
             sigma (float, optional): define the sigma parameter in Gaussian smearing. Default value is 0.02
 
         Returns:
-            E, DOS - Two 1D np.arrays that contain energy and according DOS values
+            E, DOS - Two 1D np.arrays that contain energy and according to DOS values
         """
         if zero_at_fermi is True and self.efermi is None:
             raise ValueError('You can not set zero_at_fermi=True if you did not specify efermi value')

@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
 from typing_extensions import Required, NotRequired, TypedDict
-from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos
+from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
 from echem.io_data.ddec import AtomicNetCharges
 from echem.core.constants import Hartree2eV, eV2Hartree, Bohr2Angstrom, Angstrom2Bohr
+from echem.core.electronic_structure import EBS
 from monty.re import regrep
 from subprocess import Popen, PIPE
 from timeit import default_timer as timer
@@ -15,6 +16,8 @@ from nptyping import NDArray, Shape, Number
 from typing import Literal
 from tqdm.autonotebook import tqdm
 from termcolor import colored
+from threading import Lock
+from concurrent.futures import ThreadPoolExecutor
 
 
 class System(TypedDict):
@@ -24,6 +27,7 @@ class System(TypedDict):
     output: Output | None
     ddec_nac: AtomicNetCharges | None
     output_phonons: Output | None
+    dos: EBS | None
 
 
 class DDEC_params(TypedDict):
@@ -64,6 +68,8 @@ class InfoExtractor:
         self.do_ddec = do_ddec
         self.ddec_params = ddec_params
         self.sbatch_phonon = sbatch_phonon
+
+        self.lock = Lock()
 
     def create_job_control(self,
                            filepath: str | Path,
@@ -155,7 +161,8 @@ class InfoExtractor:
 
     def get_info_multiple(self,
                           path_root_folder: str | Path,
-                          recreate_files: bool = False) -> None:
+                          recreate_files: bool = False,
+                          num_workers: int = 1) -> None:
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
 
@@ -163,9 +170,14 @@ class InfoExtractor:
         depth = max([len(f.parents) for f in subfolders])
         subfolders = [f for f in subfolders if len(f.parents) == depth]
 
-        pbar = tqdm(subfolders)
-        for folder in pbar:
-            self.get_info(folder, recreate_files)
+        with tqdm(total=len(subfolders)) as pbar:
+            with ThreadPoolExecutor(num_workers) as executor:
+                for _ in executor.map(self.get_info, subfolders, [recreate_files] * len(subfolders)):
+                    pbar.update()
+
+        #pbar = tqdm(subfolders)
+        #for folder in pbar:
+        #    self.get_info(folder, recreate_files)
 
     def get_info(self,
                  path_root_folder: str | Path,
@@ -279,33 +291,54 @@ class InfoExtractor:
             else:
                 ddec_nac = None
 
-            if 'output_phonon_dry.out' in files:
-                output_phonons = Output.from_file(path_root_folder / 'output_phonon_dry.out')
-                if self.sbatch_phonon is not None:
-                    file = open(path_root_folder / 'run_phonon.sh', 'w')
-                    file.write('#!/bin/sh\n\n')
-                    file.write(self.sbatch_phonon['main_text'])
-                    file.write('\n')
-                    for i, nstate in enumerate(output_phonons.phonons['nStates']):
-                        file.write(f'export nStates="{nstate}"\n')
-                        file.write(f'export iPert="{i + 1}"\n')
-                        file.write('#SBATCH -n {$nStates}\n')
-                        file.write(f'srun {self.sbatch_phonon["path_executable"]}' +
-                                   '-i input_phonon.in -o output_phonon_{$iPert}.out\n\n')
-                    file.close()
+            if f'{self.jdftx_prefix}.eigenvals' in files and f'{self.jdftx_prefix}.kPts' in files:
+                eigs = Eigenvals.from_file(path_root_folder / f'{self.jdftx_prefix}.eigenvals',
+                                           output)
+                kpts = kPts.from_file(path_root_folder / f'{self.jdftx_prefix}.kPts')
+                if f'{self.jdftx_prefix}.fillings' in files:
+                    occs = Fillings.from_file(path_root_folder / f'{self.jdftx_prefix}.fillings',
+                                              output).occupations
+                else:
+                    occs = None
+                dos = DOS(eigenvalues=eigs.eigenvalues * Hartree2eV,
+                          weights=kpts.weights,
+                          efermi=output.mu * Hartree2eV,
+                          occupations=occs)
+            else:
+                dos = None
+
+            #if 'output_phonon_dry.out' in files:
+            #    output_phonons = Output.from_file(path_root_folder / 'output_phonon_dry.out')
+            #    if self.sbatch_phonon is not None:
+            #        file = open(path_root_folder / 'run_phonon.sh', 'w')
+            #        file.write('#!/bin/sh\n\n')
+            #        file.write(self.sbatch_phonon['main_text'])
+            #        file.write('\n')
+            #        for i, nstate in enumerate(output_phonons.phonons['nStates']):
+            #            file.write(f'export nStates="{nstate}"\n')
+            #            file.write(f'export iPert="{i + 1}"\n')
+            #            file.write('#SBATCH -n {$nStates}\n')
+            #            file.write(f'srun {self.sbatch_phonon["path_executable"]}' +
+            #                       '-i input_phonon.in -o output_phonon_{$iPert}.out\n\n')
+            #        file.close()
         else:
             ddec_nac = None
+            dos = None
+
+        self.lock.acquire()
 
         system_proccessed = self.get_system(substrate, adsorbate, idx)
         if len(system_proccessed) == 1:
             if is_vib_folder:
                 system_proccessed[0]['output_phonons'] = output_phonons
-                system_proccessed[0]['output_phonons'] = output_phonons
-            elif output_phonons is not None:
-                system_proccessed[0]['output_phonons'] = output_phonons
+            #elif output_phonons is not None:
+            #    system_proccessed[0]['output_phonons'] = output_phonons
             else:
                 system_proccessed[0]['output'] = output
                 system_proccessed[0]['ddec_nac'] = ddec_nac
+                system_proccessed[0]['dos'] = dos
+
+            self.lock.release()
 
         elif len(system_proccessed) == 0:
             system: System = {'substrate': substrate,
@@ -313,10 +346,14 @@ class InfoExtractor:
                               'idx': idx,
                               'output': output,
                               'ddec_nac': ddec_nac,
-                              'output_phonons': output_phonons}
+                              'output_phonons': output_phonons,
+                              'dos': dos}
 
             self.systems.append(system)
+            self.lock.release()
+
         else:
+            self.lock.release()
             raise ValueError(f'There should be 0 ot 1 copy of the system in the InfoExtractor.'
                              f'However there are {len(system_proccessed)} systems copies of following system: '
                              f'{substrate=}, {adsorbate=}, {idx=}')

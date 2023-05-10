@@ -465,16 +465,42 @@ class Output(IonicDynamics):
     def get_contcar(self) -> vasp.Poscar:
         return vasp.Poscar(structure=self.structure)
 
-    def mod_phonon_zero2real(self) -> None:
+    def mod_phonon_zero2real(self, n_leave: int = 0) -> None:
         if self.phonons['zero'] is not None:
-            idx = self.phonons['zero'].imag == 0
-            invidx = np.invert(idx)
-            if any(invidx):
-                print(colored('The following values can not be converted to real:', color='red', attrs=['bold']),
-                      self.phonons['zero'][invidx])
-            mods_for_transfer = np.sort(self.phonons['zero'][idx].real)
-            self.phonons['real'] = np.hstack((mods_for_transfer, self.phonons['real']))
-            self.phonons['zero'] = self.phonons['zero'][invidx]
+            mask_real = self.phonons['zero'].imag == 0
+            mask_complex = np.invert(mask_real)
+
+            n_real = np.sum(mask_real)
+            n_imag = np.sum(mask_complex)
+            n_zero = len(self.phonons['zero'])
+            #print(f'{n_real=} {n_imag=} {n_zero=}')
+            if n_zero < n_leave:
+                print(colored(f'There is only {n_zero} zero modes, however you set {n_leave=}',
+                              color='red', attrs=['bold']))
+            elif n_zero > n_leave:
+                if n_leave > n_imag:
+                    n_transfer = n_real - (n_leave - n_imag)
+                    #print(f'Here {n_transfer=}')
+                else:
+                    n_transfer = np.sum(mask_real)
+                    #print(f'Here-2 {n_transfer=}')
+
+                if n_zero - n_transfer > n_leave:
+                    print(colored(f'Can not leave', color='red', attrs=['bold']),
+                          n_leave,
+                          colored('modes, because there are', color='red', attrs=['bold']),
+                          n_imag,
+                          colored('imaginary modes', color='red', attrs=['bold']))
+                    print(colored('The following values can not be converted to real:', color='red', attrs=['bold']),
+                          self.phonons['zero'][mask_complex])
+                else:
+                    mods_for_transfer = np.sort(self.phonons['zero'][mask_real].real)[-n_transfer:]
+                    #print(f'{mods_for_transfer=}')
+                    self.phonons['real'] = np.hstack((mods_for_transfer, self.phonons['real']))
+                    del_indices = []
+                    for mode in mods_for_transfer:
+                        del_indices.append(np.where(self.phonons['zero'] == mode)[0][0])
+                    self.phonons['zero'] = np.delete(self.phonons['zero'], del_indices)
         else:
             print(colored('There are no zero phonons', color='red', attrs=['bold']))
 
@@ -485,7 +511,7 @@ class EBS_data:
     def from_file(filepath: str | Path,
                   output: Output) -> NDArray[Shape['Nspin, Nkpts, Nbands'], Number]:
 
-        if isinstance(filepath, Path):
+        if isinstance(filepath, str):
             filepath = Path(filepath)
 
         data = np.fromfile(filepath, dtype=np.float64)
@@ -510,7 +536,7 @@ class Eigenvals(EBS_data):
     def from_file(filepath: str | Path,
                   output: Output):
 
-        if isinstance(filepath, Path):
+        if isinstance(filepath, str):
             filepath = Path(filepath)
 
         eigenvalues = super(Eigenvals, Eigenvals).from_file(filepath, output)
@@ -540,7 +566,7 @@ class Fillings(EBS_data):
     def from_file(filepath: str | Path,
                   output: Output):
 
-        if isinstance(filepath, Path):
+        if isinstance(filepath, str):
             filepath = Path(filepath)
 
         occupations = super(Fillings, Fillings).from_file(filepath, output)
@@ -579,7 +605,7 @@ class VolumetricData:
                   fft_box_size: NDArray[Shape['3'], Number],
                   structure: Structure):
 
-        if isinstance(filepath, Path):
+        if isinstance(filepath, str):
             filepath = Path(filepath)
 
         data = np.fromfile(filepath, dtype=np.float64)
@@ -598,21 +624,52 @@ class kPts:
     @staticmethod
     def from_file(filepath: str | Path):
 
-        if isinstance(filepath, Path):
+        if isinstance(filepath, str):
             filepath = Path(filepath)
 
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
         weights = []
-        spin = data[0].split()[8]
-        for line in data:
-            line_split = line.split()
-            if spin != line_split[8]:
-                break
-            weights.append(float(line.split()[6]))
-        weights = np.array(weights)
-        return kPts(weights)
+
+        if 'spin' in data[0].split():
+            for line in data[:int(len(data) / 2)]:
+                weights.append(float(line.split()[6]))
+            weights = np.array(weights)
+            return kPts(weights)
+        else:
+            for line in data:
+                weights.append(float(line.split()[6]))
+            weights = np.array(weights) / 2
+            return kPts(weights)
+
+
+class DOS(EBS):
+    @staticmethod
+    def from_folder(folderpath: str | Path,
+                    output_name: str = 'output.out',
+                    jdft_prefix='jdft',
+                    units: Literal['eV', 'Ha'] = 'eV'):
+
+        if isinstance(folderpath, str):
+            folderpath = Path(folderpath)
+
+        out = Output.from_file(folderpath / output_name)
+        eigs = Eigenvals.from_file(folderpath / f'{jdft_prefix}.eigenvals', output=out)
+        fills = Fillings.from_file(folderpath / f'{jdft_prefix}.fillings', output=out)
+        kpts = kPts.from_file(folderpath / f'{jdft_prefix}.kPts')
+        if units == 'eV':
+            return DOS(eigenvalues=eigs.eigenvalues * Hartree2eV,
+                       weights=kpts.weights,
+                       efermi=out.mu * Hartree2eV,
+                       occupations=fills.occupations)
+        elif units == 'Ha':
+            return DOS(eigenvalues=eigs.eigenvalues,
+                       weights=kpts.weights,
+                       efermi=out.mu,
+                       occupations=fills.occupations)
+        else:
+            raise ValueError(f'units can be "eV" or "Ha", however you entered "{units}"')
 
 
 class BandProjections:
