@@ -199,12 +199,12 @@ class InfoExtractor:
 
         if is_vib_folder:
             output_phonons = Output.from_file(path_root_folder / self.output_name)
-            if (any(output_phonons.phonons['zero']) and any(output_phonons.phonons['zero'] > 1e-5)) or \
-                    (any(output_phonons.phonons['imag']) and any(np.abs(output_phonons.phonons['imag']) > 1e-5)):
+            if (output_phonons.phonons['zero'] is not None and any(output_phonons.phonons['zero'] > 1e-5)) or \
+                    (output_phonons.phonons['imag'] is not None and any(np.abs(output_phonons.phonons['imag']) > 1e-5)):
                 print(colored(str(path_root_folder), color='green', attrs=['bold']))
-                if len(output_phonons.phonons["zero"]):
+                if output_phonons.phonons['zero'] is not None:
                     print(f'{len(output_phonons.phonons["zero"])} zero modes: {output_phonons.phonons["zero"]}')
-                if len(output_phonons.phonons["imag"]):
+                if output_phonons.phonons['imag'] is not None:
                     print(f'{len(output_phonons.phonons["imag"])} imag modes: {output_phonons.phonons["imag"]}')
             output = None
         else:

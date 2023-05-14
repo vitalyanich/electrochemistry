@@ -2,7 +2,7 @@ import numpy as np
 import re
 from monty.re import regrep
 from echem.core.structure import Structure
-from echem.core.constants import Bohr2Angstrom, Hartree2eV, eV2Hartree
+from echem.core.constants import Bohr2Angstrom, Angstrom2Bohr, Hartree2eV, eV2Hartree
 from echem.core.ionic_dynamics import IonicDynamics
 from echem.core.electronic_structure import EBS
 from echem.core.thermal_properties import ThermalProperties
@@ -398,7 +398,7 @@ class Output(IonicDynamics):
                 for i, line_number in enumerate(line_numbers):
                     zero_mode_freq[i] = complex(data[line_number].split()[1].replace('i', 'j'))
             else:
-                zero_mode_freq = []
+                zero_mode_freq = None
 
             if freq_report['imaginary modes']:
                 line_numbers = [int(i[1]) + 1 for i in matches['imaginary mode']]
@@ -406,7 +406,7 @@ class Output(IonicDynamics):
                 for i, line_number in enumerate(line_numbers):
                     imag_mode_freq[i] = complex(data[line_number].split()[1].replace('i', 'j'))
             else:
-                imag_mode_freq = []
+                imag_mode_freq = None
 
             if freq_report['real modes']:
                 line_numbers = [int(i[1]) + 1 for i in matches['real mode']]
@@ -414,7 +414,7 @@ class Output(IonicDynamics):
                 for i, line_number in enumerate(line_numbers):
                     real_mode_freq[i] = float(data[line_number].split()[1])
             else:
-                real_mode_freq = []
+                real_mode_freq = None
 
             phonons['zero'] = zero_mode_freq
             phonons['imag'] = imag_mode_freq
@@ -465,6 +465,12 @@ class Output(IonicDynamics):
     def get_contcar(self) -> vasp.Poscar:
         return vasp.Poscar(structure=self.structure)
 
+    def get_ionpos(self, nstep=-1) -> Ionpos:
+        return Ionpos(self.structure.species, self.coords_hist[nstep])
+
+    def get_lattice(self) -> Lattice:
+        return Lattice(self.structure.lattice * Angstrom2Bohr)
+
     def mod_phonon_zero2real(self, n_leave: int = 0) -> None:
         if self.phonons['zero'] is not None:
             mask_real = self.phonons['zero'].imag == 0
@@ -473,17 +479,14 @@ class Output(IonicDynamics):
             n_real = np.sum(mask_real)
             n_imag = np.sum(mask_complex)
             n_zero = len(self.phonons['zero'])
-            #print(f'{n_real=} {n_imag=} {n_zero=}')
             if n_zero < n_leave:
                 print(colored(f'There is only {n_zero} zero modes, however you set {n_leave=}',
                               color='red', attrs=['bold']))
             elif n_zero > n_leave:
                 if n_leave > n_imag:
                     n_transfer = n_real - (n_leave - n_imag)
-                    #print(f'Here {n_transfer=}')
                 else:
                     n_transfer = np.sum(mask_real)
-                    #print(f'Here-2 {n_transfer=}')
 
                 if n_zero - n_transfer > n_leave:
                     print(colored(f'Can not leave', color='red', attrs=['bold']),
@@ -495,14 +498,13 @@ class Output(IonicDynamics):
                           self.phonons['zero'][mask_complex])
                 else:
                     mods_for_transfer = np.sort(self.phonons['zero'][mask_real].real)[-n_transfer:]
-                    #print(f'{mods_for_transfer=}')
                     self.phonons['real'] = np.hstack((mods_for_transfer, self.phonons['real']))
                     del_indices = []
                     for mode in mods_for_transfer:
                         del_indices.append(np.where(self.phonons['zero'] == mode)[0][0])
                     self.phonons['zero'] = np.delete(self.phonons['zero'], del_indices)
         else:
-            print(colored('There are no zero phonons', color='red', attrs=['bold']))
+            print(colored('There are no zero phonons', color='green', attrs=['bold']))
 
 
 class EBS_data:
