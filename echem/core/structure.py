@@ -82,9 +82,9 @@ class Structure:
             else:
                 other.mod_coords_to_direct()
                 print(colored('Coords of other were modded into Direct', color='green'))
-        return np.allclose(self.lattice, other.lattice, atol=1e-14, rtol=1e-14) and \
+        return np.allclose(self.lattice, other.lattice, atol=1e-10, rtol=1e-10) and \
             (self.species == other.species) and \
-            np.allclose(self.coords, other.coords, atol=1e-14, rtol=1e-14)
+            np.allclose(self.coords, other.coords, atol=1e-10, rtol=1e-10)
 
     @property
     def natoms(self) -> int:

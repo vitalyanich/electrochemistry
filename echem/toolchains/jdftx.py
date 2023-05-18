@@ -307,6 +307,16 @@ class InfoExtractor:
             else:
                 dos = None
 
+            if f'output_phonon.out' in files:
+                output_phonons = Output.from_file(path_root_folder / 'output_phonon.out')
+                if (output_phonons.phonons['zero'] is not None and any(output_phonons.phonons['zero'] > 1e-5)) or \
+                        (output_phonons.phonons['imag'] is not None and any(
+                            np.abs(output_phonons.phonons['imag']) > 1e-5)):
+                    print(colored(str(path_root_folder), color='green', attrs=['bold']))
+                    if output_phonons.phonons['zero'] is not None:
+                        print(f'{len(output_phonons.phonons["zero"])} zero modes: {output_phonons.phonons["zero"]}')
+                    if output_phonons.phonons['imag'] is not None:
+                        print(f'{len(output_phonons.phonons["imag"])} imag modes: {output_phonons.phonons["imag"]}')
             #if 'output_phonon_dry.out' in files:
             #    output_phonons = Output.from_file(path_root_folder / 'output_phonon_dry.out')
             #    if self.sbatch_phonon is not None:
@@ -331,8 +341,8 @@ class InfoExtractor:
         if len(system_proccessed) == 1:
             if is_vib_folder:
                 system_proccessed[0]['output_phonons'] = output_phonons
-            #elif output_phonons is not None:
-            #    system_proccessed[0]['output_phonons'] = output_phonons
+            elif output_phonons is not None:
+                system_proccessed[0]['output_phonons'] = output_phonons
             else:
                 system_proccessed[0]['output'] = output
                 system_proccessed[0]['ddec_nac'] = ddec_nac
