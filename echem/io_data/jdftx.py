@@ -224,7 +224,8 @@ class Output(IonicDynamics):
                  HOMO: float | None,
                  LUMO: float | None,
                  phonons: dict[Literal['real', 'imag', 'zero', 'nStates'], np.ndarray | None],
-                 pseudopots: dict):
+                 pseudopots: dict,
+                 lowding: dict[str, float] | None):
         super(Output, self).__init__(forces_hist)
         self.fft_box_size = fft_box_size
         self.energy_ionic_hist = energy_ionic_hist
@@ -239,6 +240,7 @@ class Output(IonicDynamics):
         self.LUMO = LUMO
         self.phonons = phonons
         self.pseudopots = pseudopots
+        self.lowdin = lowding
         if phonons['real'] is not None and len(phonons['real']) > 0:
             self.thermal_props = ThermalProperties(np.array([phonons['real']]) * Hartree2eV)
 
@@ -318,7 +320,8 @@ class Output(IonicDynamics):
                     'ionic convergence': r'IonicMinimize: Converged',
                     'pseudopots': r'\s*Title:\s+([a-zA-Z0-9]*).',
                     'valence_elecs': r'(\d+) valence electrons in orbitals',
-                    'phonon_perturbations': r'\s+Perturbation:\s+\d+\s+nStates:\s+(\d+)'}
+                    'phonon_perturbations': r'\s+Perturbation:\s+\d+\s+nStates:\s+(\d+)',
+                    'lowdin': r'#--- Lowdin population analysis ---'}
 
         matches = regrep(str(filepath), patterns)
 
@@ -445,12 +448,22 @@ class Output(IonicDynamics):
             coords_hist = [[[float(i) for i in coord[0]] for coord in matches['coords']]]
             coords_hist = np.array(coords_hist)
 
+        if matches['lowdin']:
+            lowdin = {}
+            i = matches['lowdin'][-1][1] + 1
+            while (line := data[i]) != '\n':
+                line = line.split()
+                lowdin[line[2]] = [float(i) for i in line[3:]]
+                i += 1
+        else:
+            lowdin = None
+
         structure = Structure(lattice, species, coords_hist[-1] * Bohr2Angstrom, coords_are_cartesian=True)
 
         pseudopots = {i[0][0]: int(j[0][0]) for i, j in zip(matches['pseudopots'], matches['valence_elecs'])}
 
         return Output(fft_box_size, energy_ionic_hist, coords_hist, forces_hist, nelec_hist, magnetization_hist,
-                      structure, nbands, nkpts, mu, HOMO, LUMO, phonons, pseudopots)
+                      structure, nbands, nkpts, mu, HOMO, LUMO, phonons, pseudopots, lowdin)
 
     def get_xdatcar(self) -> vasp.Xdatcar:
         transform = np.linalg.inv(self.structure.lattice)
