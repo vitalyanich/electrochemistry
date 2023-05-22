@@ -17,7 +17,7 @@ class ACF:
 
         data = np.genfromtxt(filepath, skip_header=2, skip_footer=4)
 
-        return ACF(data[:, 1-4], data[:, 4])
+        return ACF(data[:, 1:4], data[:, 4])
 
     def get_charge(self,
                    nele_per_isolated_atom: NDArray[Shape['Natoms'], Number]):
