@@ -1,9 +1,9 @@
-import os
 from pathlib import Path
 from wsl_pathlib.path import WslPath
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
 from echem.io_data.ddec import AtomicNetCharges
+from echem.io_data.universal import Cube
 from echem.io_data.bader import ACF
 from echem.core.constants import Hartree2eV, eV2Hartree, Bohr2Angstrom, Angstrom2Bohr
 from echem.core.electronic_structure import EBS
@@ -217,29 +217,32 @@ class InfoExtractor:
             output = Output.from_file(path_root_folder / self.output_name)
             output_phonons = None
 
-        # Check whether all necessary files have been already created
         if not is_vib_folder:
-            if not all(i in files for i in ['valence_density.cube',
-                                            'POSCAR', 'CONTCAR', 'XDATCAR']) or recreate_files:
-                print('Create necessary files for', colored(str(path_root_folder), attrs=['bold']))
 
-                fft_box_size = output.fft_box_size
-
+            if 'POSCAR' not in files or recreate_files:
+                print('Create POSCAR for\t', colored(str(path_root_folder), attrs=['bold']))
                 poscar = output.get_poscar()
                 poscar.to_file(path_root_folder / 'POSCAR')
 
+            if 'CONTCAR' not in files or recreate_files:
+                print('Create CONTCAR for\t', colored(str(path_root_folder), attrs=['bold']))
                 contcar = output.get_contcar()
                 contcar.to_file(path_root_folder / 'CONTCAR')
 
+            if 'XDATCAR' not in files or recreate_files:
+                print('Create XDATCAR for\t', colored(str(path_root_folder), attrs=['bold']))
                 xdatcar = output.get_xdatcar()
                 xdatcar.to_file(path_root_folder / 'XDATCAR')
 
-                if 'output_volumetric.out' in files:
-                    files.remove('output_volumetric.out')
-                    patterns = {'fft_box_size': r'Chosen fftbox size, S = \[(\s+\d+\s+\d+\s+\d+\s+)\]'}
-                    matches = regrep(str(path_root_folder / 'output_volumetric.out'), patterns)
-                    fft_box_size = np.array([int(i) for i in matches['fft_box_size'][0][0][0].split()])
+            fft_box_size = output.fft_box_size
+            if 'output_volumetric.out' in files:
+                files.remove('output_volumetric.out')
+                patterns = {'fft_box_size': r'Chosen fftbox size, S = \[(\s+\d+\s+\d+\s+\d+\s+)\]'}
+                matches = regrep(str(path_root_folder / 'output_volumetric.out'), patterns)
+                fft_box_size = np.array([int(i) for i in matches['fft_box_size'][0][0][0].split()])
 
+            if 'valence_density.cube' not in files or recreate_files:
+                print('Create valence(spin)_density for\t', colored(str(path_root_folder), attrs=['bold']))
                 if f'{self.jdftx_prefix}.n_up' in files and f'{self.jdftx_prefix}.n_dn' in files:
                     n_up = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.n_up',
                                                     fft_box_size,
@@ -254,26 +257,30 @@ class InfoExtractor:
                         n = n_up - n_dn
                         n.to_file(path_root_folder / 'spin__density.cube')
 
-                    if 'spin_density.cube' in files:
-                        os.remove(path_root_folder / 'spin_density.cube')
-
                 elif f'{self.jdftx_prefix}.n' in files:
                     n = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.n',
                                                  fft_box_size,
                                                  output.structure).convert_to_cube()
                     n.to_file(path_root_folder / 'valence_density.cube')
+                else:
+                    print(colored('(!) There is no files for valence(spin)_density.cube creation',
+                                  color='red', attrs=['bold']))
 
-                for file in files:
-                    if file.startswith(f'{self.jdftx_prefix}.fluidN_'):
+            if ('nbound.cube' not in files or recreate_files) and f'{self.jdftx_prefix}.nbound' in files:
+                print('Create nbound.cube for\t', colored(str(path_root_folder), attrs=['bold']))
+                nbound = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.nbound',
+                                                  fft_box_size, output.structure).convert_to_cube()
+                nbound.to_file(path_root_folder / 'nbound.cube')
+
+            for file in files:
+                if file.startswith(f'{self.jdftx_prefix}.fluidN_'):
+                    fluid_type = file.removeprefix(self.jdftx_prefix + '.')
+                    if f'{fluid_type}.cube' not in files or recreate_files:
+                        print(f'Create {fluid_type}.cube for\t', colored(str(path_root_folder), attrs=['bold']))
                         fluidN = VolumetricData.from_file(path_root_folder / file,
                                                           fft_box_size,
                                                           output.structure).convert_to_cube()
-                        fluidN.to_file(path_root_folder / (file.removeprefix(self.jdftx_prefix + '.') + '.cube'))
-
-                if 'nbound.cube' not in files and f'{self.jdftx_prefix}.nbound' in files:
-                    nbound = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.nbound',
-                                                      fft_box_size, output.structure).convert_to_cube()
-                    nbound.to_file(path_root_folder / 'nbound.cube')
+                        fluidN.to_file(path_root_folder / (fluid_type + '.cube'))
 
             if self.ddec_params is not None and ('job_control.txt' not in files or recreate_files):
                 print('Create job_control.txt for', colored(str(path_root_folder), attrs=['bold']))
@@ -309,7 +316,7 @@ class InfoExtractor:
             else:
                 nac_bader = None
 
-            if 'DDEC6_even_tempered_net_atomic_charges.xyz' in files:
+            if not recreate_files and 'DDEC6_even_tempered_net_atomic_charges.xyz' in files:
                 ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
             elif self.ddec_params is not None and self.do_ddec:
                 print('DDEC NACs have not been found in folder', colored(str(path_root_folder), attrs=['bold']))
@@ -350,20 +357,7 @@ class InfoExtractor:
                         print(f'{len(output_phonons.phonons["zero"])} zero modes: {output_phonons.phonons["zero"]}')
                     if output_phonons.phonons['imag'] is not None:
                         print(f'{len(output_phonons.phonons["imag"])} imag modes: {output_phonons.phonons["imag"]}')
-            #if 'output_phonon_dry.out' in files:
-            #    output_phonons = Output.from_file(path_root_folder / 'output_phonon_dry.out')
-            #    if self.sbatch_phonon is not None:
-            #        file = open(path_root_folder / 'run_phonon.sh', 'w')
-            #        file.write('#!/bin/sh\n\n')
-            #        file.write(self.sbatch_phonon['main_text'])
-            #        file.write('\n')
-            #        for i, nstate in enumerate(output_phonons.phonons['nStates']):
-            #            file.write(f'export nStates="{nstate}"\n')
-            #            file.write(f'export iPert="{i + 1}"\n')
-            #            file.write('#SBATCH -n {$nStates}\n')
-            #            file.write(f'srun {self.sbatch_phonon["path_executable"]}' +
-            #                       '-i input_phonon.in -o output_phonon_{$iPert}.out\n\n')
-            #        file.close()
+
         else:
             ddec_nac = None
             nac_bader = None
