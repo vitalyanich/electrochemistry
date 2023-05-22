@@ -60,6 +60,9 @@ class Cube:
 
         return Cube(self.volumetric_data - other.volumetric_data, self.structure, self.origin)
 
+    def __neg__(self):
+        return Cube(-self.volumetric_data, self.structure, self.origin)
+
     @staticmethod
     def from_file(filepath):
         with open(filepath, 'rt') as file:
