@@ -448,13 +448,16 @@ class Output(IonicDynamics):
             coords_hist = [[[float(i) for i in coord[0]] for coord in matches['coords']]]
             coords_hist = np.array(coords_hist)
 
-        if matches['lowdin']:
+        if bool(matches['lowdin']):
             lowdin = {}
             i = matches['lowdin'][-1][1] + 1
             while (line := data[i]) != '\n':
                 line = line.split()
                 lowdin[line[2]] = [float(i) for i in line[3:]]
-                i += 1
+                if bool(matches['magnetization']):
+                    i += 2
+                else:
+                    i += 1
         else:
             lowdin = None
 

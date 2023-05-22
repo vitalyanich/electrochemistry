@@ -93,9 +93,9 @@ class Output_DDEC:
         structure = Structure(lattice, species, coords)
 
         line_number = matches['lmm'][0][1] + 3
-        lmm_ddec = Output_DDEC._process_lmm_(data, line_number, natoms)
-        line_number = matches['lmm'][1][1] + 3
         lmm_hirshfeld = Output_DDEC._process_lmm_(data, line_number, natoms)
+        line_number = matches['lmm'][1][1] + 3
+        lmm_ddec = Output_DDEC._process_lmm_(data, line_number, natoms)
 
         line_number = matches['cm5'][0][1] + 1
         charges_cm5 = []

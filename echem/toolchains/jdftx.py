@@ -2,8 +2,7 @@ from pathlib import Path
 from wsl_pathlib.path import WslPath
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
-from echem.io_data.ddec import AtomicNetCharges
-from echem.io_data.universal import Cube
+from echem.io_data.ddec import Output_DDEC
 from echem.io_data.bader import ACF
 from echem.core.constants import Hartree2eV, eV2Hartree, Bohr2Angstrom, Angstrom2Bohr
 from echem.core.electronic_structure import EBS
@@ -28,7 +27,7 @@ class System(TypedDict):
     adsorbate: str
     idx: int
     output: Output | None
-    ddec_nac: AtomicNetCharges | None
+    nac_ddec: Output_DDEC | None
     output_phonons: Output | None
     dos: EBS | None
     nac_bader: ACF | None
@@ -181,10 +180,6 @@ class InfoExtractor:
                 for _ in executor.map(self.get_info, subfolders, [recreate_files] * len(subfolders)):
                     pbar.update()
 
-        #pbar = tqdm(subfolders)
-        #for folder in pbar:
-        #    self.get_info(folder, recreate_files)
-
     def get_info(self,
                  path_root_folder: str | Path,
                  recreate_files: bool = False) -> None:
@@ -207,7 +202,7 @@ class InfoExtractor:
             output_phonons = Output.from_file(path_root_folder / self.output_name)
             if (output_phonons.phonons['zero'] is not None and any(output_phonons.phonons['zero'] > 1e-5)) or \
                     (output_phonons.phonons['imag'] is not None and any(np.abs(output_phonons.phonons['imag']) > 1e-5)):
-                print(colored(str(path_root_folder), color='green', attrs=['bold']))
+                print(colored(str(path_root_folder), color='yellow', attrs=['bold']))
                 if output_phonons.phonons['zero'] is not None:
                     print(f'{len(output_phonons.phonons["zero"])} zero modes: {output_phonons.phonons["zero"]}')
                 if output_phonons.phonons['imag'] is not None:
@@ -292,7 +287,7 @@ class InfoExtractor:
             if 'ACF.dat' in files:
                 nac_bader = ACF.from_file(path_root_folder / 'ACF.dat')
             elif self.do_bader:
-                print(colored('Doing Bader for', attrs=['bold']), path_root_folder)
+                print('Run Bader for', colored(str(path_root_folder), attrs=['bold']))
 
                 subprocess.run(["wsl", "~", "-e", "mkdir", path_root_folder.name])
                 sp = subprocess.run(["wsl", "../bader", "-c", "bader", "-i", "cube",
@@ -316,20 +311,19 @@ class InfoExtractor:
             else:
                 nac_bader = None
 
-            if not recreate_files and 'DDEC6_even_tempered_net_atomic_charges.xyz' in files:
-                ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
+            if not recreate_files and 'valence_cube_DDEC_analysis.output' in files:
+                nac_ddec = Output_DDEC.from_file(path_root_folder / 'valence_cube_DDEC_analysis.output')
             elif self.ddec_params is not None and self.do_ddec:
-                print('DDEC NACs have not been found in folder', colored(str(path_root_folder), attrs=['bold']))
-                print('Run DDEC')
+                print('Run DDEC for', colored(str(path_root_folder), attrs=['bold']))
                 start = timer()
 
                 p = Popen(str(self.ddec_params['path_ddec_executable']), stdin=PIPE, bufsize=0)
                 p.communicate(str(path_root_folder).encode('ascii'))
                 end = timer()
                 print(f'Done! Elapsed time: {timedelta(seconds=end-start)}')
-                ddec_nac = AtomicNetCharges.from_file(path_root_folder / 'DDEC6_even_tempered_net_atomic_charges.xyz')
+                nac_ddec = Output_DDEC.from_file(path_root_folder / 'valence_cube_DDEC_analysis.output')
             else:
-                ddec_nac = None
+                nac_ddec = None
 
             if f'{self.jdftx_prefix}.eigenvals' in files and f'{self.jdftx_prefix}.kPts' in files:
                 eigs = Eigenvals.from_file(path_root_folder / f'{self.jdftx_prefix}.eigenvals',
@@ -352,14 +346,14 @@ class InfoExtractor:
                 if (output_phonons.phonons['zero'] is not None and any(output_phonons.phonons['zero'] > 1e-5)) or \
                         (output_phonons.phonons['imag'] is not None and any(
                             np.abs(output_phonons.phonons['imag']) > 1e-5)):
-                    print(colored(str(path_root_folder), color='green', attrs=['bold']))
+                    print(colored(str(path_root_folder), color='yellow', attrs=['bold']))
                     if output_phonons.phonons['zero'] is not None:
                         print(f'{len(output_phonons.phonons["zero"])} zero modes: {output_phonons.phonons["zero"]}')
                     if output_phonons.phonons['imag'] is not None:
                         print(f'{len(output_phonons.phonons["imag"])} imag modes: {output_phonons.phonons["imag"]}')
 
         else:
-            ddec_nac = None
+            nac_ddec = None
             nac_bader = None
             dos = None
 
@@ -373,7 +367,7 @@ class InfoExtractor:
                 system_proccessed[0]['output_phonons'] = output_phonons
             else:
                 system_proccessed[0]['output'] = output
-                system_proccessed[0]['ddec_nac'] = ddec_nac
+                system_proccessed[0]['nac_ddec'] = nac_ddec
                 system_proccessed[0]['dos'] = dos
                 system_proccessed[0]['nac_bader'] = nac_bader
 
@@ -384,7 +378,7 @@ class InfoExtractor:
                               'adsorbate': adsorbate,
                               'idx': idx,
                               'output': output,
-                              'ddec_nac': ddec_nac,
+                              'nac_ddec': nac_ddec,
                               'output_phonons': output_phonons,
                               'dos': dos,
                               'nac_bader': nac_bader}
@@ -543,8 +537,8 @@ def create_z_displacements(folder_source: str | Path,
         folder_result: path for the folder where all final files will be saved
         n_atoms_mol: number of atoms that should be displaced. All atoms must be in the end atom list in .ionpos
         scan_range: array with displacement (in angstroms) for the selected atoms
-        create_flat_surface: if True all atoms will be projected into graphene sirface; if False all atoms except molecule's remain at initial positions
-        folder_files_to_copy: path for the folder with input.in and run.sh files to copy into each folder woth final configurations
+        create_flat_surface: if True all atoms will be projected into graphene surface; if False all atoms except molecules remain at initial positions
+        folder_files_to_copy: path for the folder with input.in and run.sh files to copy into each folder with final configurations
     """
     if isinstance(folder_source, str):
         folder_source = Path(folder_source)
