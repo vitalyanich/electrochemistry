@@ -248,17 +248,17 @@ class InfoExtractor:
         if not is_vib_folder:
 
             if 'POSCAR' not in files or recreate_files['cars']:
-                print('Create POSCAR for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
+                print('Create POSCAR for\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 poscar = output.get_poscar()
                 poscar.to_file(path_root_folder / 'POSCAR')
 
             if 'CONTCAR' not in files or recreate_files['cars']:
-                print('Create CONTCAR for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
+                print('Create CONTCAR for\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 contcar = output.get_contcar()
                 contcar.to_file(path_root_folder / 'CONTCAR')
 
             if 'XDATCAR' not in files or recreate_files['cars']:
-                print('Create XDATCAR for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
+                print('Create XDATCAR for\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 xdatcar = output.get_xdatcar()
                 xdatcar.to_file(path_root_folder / 'XDATCAR')
 
@@ -295,7 +295,7 @@ class InfoExtractor:
                                   color='red', attrs=['bold']))
 
             if ('nbound.cube' not in files or recreate_files['cubes']) and f'{self.jdftx_prefix}.nbound' in files:
-                print('Create nbound.cube for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
+                print('Create nbound.cube for\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 nbound = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.nbound',
                                                   fft_box_size, output.structure).convert_to_cube()
                 nbound.to_file(path_root_folder / 'nbound.cube')
@@ -322,13 +322,15 @@ class InfoExtractor:
                 nac_bader.nelec_per_isolated_atom = np.array([output.pseudopots[key] for key in
                                                               output.structure.species])
             elif self.do_bader:
-                print('Run Bader for\t\t', colored(str(path_root_folder), attrs=['bold']))
+                print('Run Bader for\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
 
                 string = str(path_root_folder.name.split('_')[1])
                 print_com = ''
                 if string != 'Pristine':
                     print_com += ' -o atoms'
                     length = len(re.findall(r'[A-Z]', string))
+                    ints = [int(i) for i in re.findall(r'[2-9]', string)]
+                    length += sum(ints) - len(ints)
                     while length > 0:
                         print_com += f' -i {output.structure.natoms + 1 - length}'
                         length -= 1
