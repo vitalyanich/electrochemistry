@@ -1,5 +1,5 @@
 from pathlib import Path
-from wsl_pathlib.path import WslPath
+#from wsl_pathlib.path import WslPath
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
 from echem.io_data.ddec import Output_DDEC
@@ -8,11 +8,12 @@ from echem.core.constants import Hartree2eV, eV2Hartree, Bohr2Angstrom, Angstrom
 from echem.core.electronic_structure import EBS
 from monty.re import regrep
 from subprocess import Popen, PIPE
-import subprocess
+#import subprocess
 from timeit import default_timer as timer
 from datetime import timedelta
 import matplotlib.pyplot as plt
 import shutil
+import re
 import numpy as np
 from nptyping import NDArray, Shape, Number
 from typing import Literal
@@ -43,15 +44,10 @@ class DDEC_params(TypedDict):
     number_of_core_electrons: NotRequired[list[list[int]]]
 
 
-class SBATCH_phonon(TypedDict):
-    main_text: NotRequired[str]
-    path_executable: Required[str]
-
-
 class InfoExtractor:
     def __init__(self,
                  ddec_params: DDEC_params = None,
-                 sbatch_phonon: SBATCH_phonon = None,
+                 path_bader_executable: Path | str = None,
                  systems: list[System] = None,
                  output_name: str = 'output.out',
                  jdftx_prefix: str = 'jdft',
@@ -67,12 +63,15 @@ class InfoExtractor:
         if systems is None:
             self.systems = []
 
+        if isinstance(path_bader_executable, str):
+            path_bader_executable = Path(path_bader_executable)
+
         self.output_name = output_name
         self.jdftx_prefix = jdftx_prefix
         self.do_ddec = do_ddec
         self.ddec_params = ddec_params
-        self.sbatch_phonon = sbatch_phonon
         self.do_bader = do_bader
+        self.path_bader_executable = path_bader_executable
 
         self.lock = Lock()
 
@@ -166,7 +165,7 @@ class InfoExtractor:
 
     def get_info_multiple(self,
                           path_root_folder: str | Path,
-                          recreate_files: bool = False,
+                          recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes'], bool] = None,
                           num_workers: int = 1) -> None:
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
@@ -182,10 +181,22 @@ class InfoExtractor:
 
     def get_info(self,
                  path_root_folder: str | Path,
-                 recreate_files: bool = False) -> None:
+                 recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes'], bool] = None) -> None:
 
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
+
+        if recreate_files is None:
+            recreate_files = {'bader': False, 'ddec': False, 'cars': False, 'cubes': False}
+        else:
+            if 'bader' not in recreate_files:
+                recreate_files['bader'] = False
+            if 'ddec' not in recreate_files:
+                recreate_files['ddec'] = False
+            if 'cars' not in recreate_files:
+                recreate_files['cars'] = False
+            if 'cubes' not in recreate_files:
+                recreate_files['cubes'] = False
 
         files = [file.name for file in path_root_folder.iterdir() if file.is_file()]
 
@@ -201,12 +212,34 @@ class InfoExtractor:
         if is_vib_folder:
             output_phonons = Output.from_file(path_root_folder / self.output_name)
             if (output_phonons.phonons['zero'] is not None and any(output_phonons.phonons['zero'] > 1e-5)) or \
-                    (output_phonons.phonons['imag'] is not None and any(np.abs(output_phonons.phonons['imag']) > 1e-5)):
+                    (output_phonons.phonons['imag'] is not None and any(
+                        np.abs(output_phonons.phonons['imag']) > 1e-5)):
                 print(colored(str(path_root_folder), color='yellow', attrs=['bold']))
+
                 if output_phonons.phonons['zero'] is not None:
-                    print(f'{len(output_phonons.phonons["zero"])} zero modes: {output_phonons.phonons["zero"]}')
+                    string = '['
+                    for i in output_phonons.phonons['zero']:
+                        if i.imag != 0:
+                            string += str(i.real) + '+' + colored(str(i.imag) + 'j', color='yellow',
+                                                                  attrs=['bold']) + ', '
+                        else:
+                            string += str(i.real) + '+' + str(i.imag) + 'j, '
+                    string = string[:-2]
+                    string += ']'
+                    print(f'{len(output_phonons.phonons["zero"])} zero modes: {string}')
+
                 if output_phonons.phonons['imag'] is not None:
-                    print(f'{len(output_phonons.phonons["imag"])} imag modes: {output_phonons.phonons["imag"]}')
+                    string = '['
+                    for i in output_phonons.phonons['imag']:
+                        if i.imag != 0:
+                            string += str(i.real) + '+' + colored(str(i.imag) + 'j', color='yellow',
+                                                                  attrs=['bold']) + ', '
+                        else:
+                            string += str(i.real) + '+' + str(i.imag) + 'j, '
+                    string = string[:-2]
+                    string += ']'
+                    print(f'{len(output_phonons.phonons["imag"])} imag modes: {string}')
+
             output = None
         else:
             output = Output.from_file(path_root_folder / self.output_name)
@@ -214,18 +247,18 @@ class InfoExtractor:
 
         if not is_vib_folder:
 
-            if 'POSCAR' not in files or recreate_files:
-                print('Create POSCAR for\t', colored(str(path_root_folder), attrs=['bold']))
+            if 'POSCAR' not in files or recreate_files['cars']:
+                print('Create POSCAR for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 poscar = output.get_poscar()
                 poscar.to_file(path_root_folder / 'POSCAR')
 
-            if 'CONTCAR' not in files or recreate_files:
-                print('Create CONTCAR for\t', colored(str(path_root_folder), attrs=['bold']))
+            if 'CONTCAR' not in files or recreate_files['cars']:
+                print('Create CONTCAR for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 contcar = output.get_contcar()
                 contcar.to_file(path_root_folder / 'CONTCAR')
 
-            if 'XDATCAR' not in files or recreate_files:
-                print('Create XDATCAR for\t', colored(str(path_root_folder), attrs=['bold']))
+            if 'XDATCAR' not in files or recreate_files['cars']:
+                print('Create XDATCAR for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 xdatcar = output.get_xdatcar()
                 xdatcar.to_file(path_root_folder / 'XDATCAR')
 
@@ -236,7 +269,7 @@ class InfoExtractor:
                 matches = regrep(str(path_root_folder / 'output_volumetric.out'), patterns)
                 fft_box_size = np.array([int(i) for i in matches['fft_box_size'][0][0][0].split()])
 
-            if 'valence_density.cube' not in files or recreate_files:
+            if 'valence_density.cube' not in files or recreate_files['cubes']:
                 print('Create valence(spin)_density for\t', colored(str(path_root_folder), attrs=['bold']))
                 if f'{self.jdftx_prefix}.n_up' in files and f'{self.jdftx_prefix}.n_dn' in files:
                     n_up = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.n_up',
@@ -261,8 +294,8 @@ class InfoExtractor:
                     print(colored('(!) There is no files for valence(spin)_density.cube creation',
                                   color='red', attrs=['bold']))
 
-            if ('nbound.cube' not in files or recreate_files) and f'{self.jdftx_prefix}.nbound' in files:
-                print('Create nbound.cube for\t', colored(str(path_root_folder), attrs=['bold']))
+            if ('nbound.cube' not in files or recreate_files['cubes']) and f'{self.jdftx_prefix}.nbound' in files:
+                print('Create nbound.cube for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 nbound = VolumetricData.from_file(path_root_folder / f'{self.jdftx_prefix}.nbound',
                                                   fft_box_size, output.structure).convert_to_cube()
                 nbound.to_file(path_root_folder / 'nbound.cube')
@@ -270,57 +303,82 @@ class InfoExtractor:
             for file in files:
                 if file.startswith(f'{self.jdftx_prefix}.fluidN_'):
                     fluid_type = file.removeprefix(self.jdftx_prefix + '.')
-                    if f'{fluid_type}.cube' not in files or recreate_files:
+                    if f'{fluid_type}.cube' not in files or recreate_files['cubes']:
                         print(f'Create {fluid_type}.cube for\t', colored(str(path_root_folder), attrs=['bold']))
                         fluidN = VolumetricData.from_file(path_root_folder / file,
                                                           fft_box_size,
                                                           output.structure).convert_to_cube()
                         fluidN.to_file(path_root_folder / (fluid_type + '.cube'))
 
-            if self.ddec_params is not None and ('job_control.txt' not in files or recreate_files):
-                print('Create job_control.txt for', colored(str(path_root_folder), attrs=['bold']))
+            if self.ddec_params is not None and ('job_control.txt' not in files or recreate_files['ddec']):
+                print('Create job_control.txt for\t', colored(str(path_root_folder), attrs=['bold']))
                 charge = - (output.nelec_hist[-1] - output.nelec_pzc)
                 self.create_job_control(filepath=path_root_folder / 'job_control.txt',
                                         charge=charge,
                                         ddec_params=self.ddec_params)
 
-            if 'ACF.dat' in files:
+            if 'ACF.dat' in files and not recreate_files['bader']:
                 nac_bader = ACF.from_file(path_root_folder / 'ACF.dat')
+                nac_bader.nelec_per_isolated_atom = np.array([output.pseudopots[key] for key in
+                                                              output.structure.species])
             elif self.do_bader:
-                print('Run Bader for', colored(str(path_root_folder), attrs=['bold']))
+                print('Run Bader for\t\t', colored(str(path_root_folder), attrs=['bold']))
 
-                subprocess.run(["wsl", "~", "-e", "mkdir", path_root_folder.name])
-                sp = subprocess.run(["wsl", "../bader", "-c", "bader", "-i", "cube",
-                                     f"/{WslPath(path_root_folder).wsl_path}/valence_density.cube"],
-                                    capture_output=True,
-                                    cwd=rf'\\wsl.localhost\Ubuntu-22.04\home\v_linux\{path_root_folder.name}')
+                string = str(path_root_folder.name.split('_')[1])
+                print_com = ''
+                if string != 'Pristine':
+                    print_com += ' -o atoms'
+                    length = len(re.findall(r'[A-Z]', string))
+                    while length > 0:
+                        print_com += f' -i {output.structure.natoms + 1 - length}'
+                        length -= 1
 
-                if 'WRITING BADER ATOMIC CHARGES TO ACF.dat' not in sp.stdout.decode('UTF-8'):
-                    print(colored('Can not do Bader charge analysis for', color='red', attrs=['bold']),
-                          path_root_folder)
-                    nac_bader = None
-                else:
-                    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/ACF.dat",
-                                    f"/{WslPath(path_root_folder).wsl_path}/ACF.dat"])
-                    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/AVF.dat",
-                                    f"/{WslPath(path_root_folder).wsl_path}/AVF.dat"])
-                    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/BCF.dat",
-                                    f"/{WslPath(path_root_folder).wsl_path}/BCF.dat"])
-                    subprocess.run(["wsl", "~", "-e", "rm", "-r", path_root_folder.name])
-                    nac_bader = ACF.from_file(path_root_folder / 'ACF.dat')
+                spin_com = ''
+                if f'{self.jdftx_prefix}.n_up' in files and \
+                        f'{self.jdftx_prefix}.n_dn' in files and \
+                        output.magnetization_abs > 1e-2:
+                    spin_com = ' -s ' + str(path_root_folder / 'spin__density.cube')
+
+                com = str(self.path_bader_executable) + ' -t cube' + \
+                      print_com + spin_com + ' ' + str(path_root_folder / 'valence_density.cube')
+                p = Popen(com, cwd=path_root_folder)
+                p.wait()
+
+                #subprocess.run(["wsl", "~", "-e", "mkdir", path_root_folder.name])
+                #sp = subprocess.run(["wsl", "../bader", "-c", "bader", "-i", "cube",
+                #                     f"/{WslPath(path_root_folder).wsl_path}/valence_density.cube"],
+                #                    capture_output=True,
+                #                    cwd=rf'\\wsl.localhost\Ubuntu-22.04\home\v_linux\{path_root_folder.name}')
+
+                #if 'WRITING BADER ATOMIC CHARGES TO ACF.dat' not in sp.stdout.decode('UTF-8'):
+                #    print(colored('Can not do Bader charge analysis for', color='red', attrs=['bold']),
+                #          path_root_folder)
+                #    nac_bader = None
+                #else:
+                #    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/ACF.dat",
+                #                    f"/{WslPath(path_root_folder).wsl_path}/ACF.dat"])
+                #    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/AVF.dat",
+                #                    f"/{WslPath(path_root_folder).wsl_path}/AVF.dat"])
+                #    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/BCF.dat",
+                #                    f"/{WslPath(path_root_folder).wsl_path}/BCF.dat"])
+                #    subprocess.run(["wsl", "~", "-e", "rm", "-r", path_root_folder.name])
+                nac_bader = ACF.from_file(path_root_folder / 'ACF.dat')
+                nac_bader.nelec_per_isolated_atom = np.array([output.pseudopots[key] for key in
+                                                              output.structure.species])
             else:
                 nac_bader = None
 
-            if not recreate_files and 'valence_cube_DDEC_analysis.output' in files:
+            if not recreate_files['ddec'] and 'valence_cube_DDEC_analysis.output' in files:
                 nac_ddec = Output_DDEC.from_file(path_root_folder / 'valence_cube_DDEC_analysis.output')
             elif self.ddec_params is not None and self.do_ddec:
-                print('Run DDEC for', colored(str(path_root_folder), attrs=['bold']))
+                print('Run DDEC for\t\t', colored(str(path_root_folder), attrs=['bold']))
                 start = timer()
 
                 p = Popen(str(self.ddec_params['path_ddec_executable']), stdin=PIPE, bufsize=0)
                 p.communicate(str(path_root_folder).encode('ascii'))
                 end = timer()
-                print(f'Done! Elapsed time: {timedelta(seconds=end-start)}')
+                print(f'DDEC Finished! Elapsed time: {timedelta(seconds=end-start)}',
+                      colored(str(path_root_folder), attrs=['bold']))
                 nac_ddec = Output_DDEC.from_file(path_root_folder / 'valence_cube_DDEC_analysis.output')
             else:
                 nac_ddec = None
@@ -348,9 +406,28 @@ class InfoExtractor:
                             np.abs(output_phonons.phonons['imag']) > 1e-5)):
                     print(colored(str(path_root_folder), color='yellow', attrs=['bold']))
                     if output_phonons.phonons['zero'] is not None:
-                        print(f'{len(output_phonons.phonons["zero"])} zero modes: {output_phonons.phonons["zero"]}')
+                        string = '['
+                        for i in output_phonons.phonons['zero']:
+                            if i.imag != 0:
+                                string += str(i.real) + '+' + colored(str(i.imag) + 'j', color='yellow',
+                                                                      attrs=['bold']) + ', '
+                            else:
+                                string += str(i.real) + '+' + str(i.imag) + 'j, '
+                        string = string[:-2]
+                        string += ']'
+                        print(f'{len(output_phonons.phonons["zero"])} zero modes: {string}')
+
                     if output_phonons.phonons['imag'] is not None:
-                        print(f'{len(output_phonons.phonons["imag"])} imag modes: {output_phonons.phonons["imag"]}')
+                        string = '['
+                        for i in output_phonons.phonons['imag']:
+                            if i.imag != 0:
+                                string += str(i.real) + '+' + colored(str(i.imag) + 'j', color='yellow',
+                                                                      attrs=['bold']) + ', '
+                            else:
+                                string += str(i.real) + '+' + str(i.imag) + 'j, '
+                        string = string[:-2]
+                        string += ']'
+                        print(f'{len(output_phonons.phonons["imag"])} imag modes: {string}')
 
         else:
             nac_ddec = None
@@ -361,9 +438,7 @@ class InfoExtractor:
 
         system_proccessed = self.get_system(substrate, adsorbate, idx)
         if len(system_proccessed) == 1:
-            if is_vib_folder:
-                system_proccessed[0]['output_phonons'] = output_phonons
-            elif output_phonons is not None:
+            if output_phonons is not None:
                 system_proccessed[0]['output_phonons'] = output_phonons
             else:
                 system_proccessed[0]['output'] = output
