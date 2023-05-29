@@ -9,20 +9,35 @@ class ACF:
                  nelec_per_atom: NDArray[Shape['Natoms'], Number]):
         self.coords = coords
         self.nelec_per_atom = nelec_per_atom
+        self.nelec_per_isolated_atom = None
 
     @staticmethod
     def from_file(filepath: str | Path):
         if isinstance(filepath, str):
             filepath = Path(filepath)
 
-        data = np.genfromtxt(filepath, skip_header=2, skip_footer=4)
+        file = open(filepath)
+        file.readline()
+        line = file.readline()
+
+        if '+' in line:
+            data = np.genfromtxt(filepath, skip_header=2, skip_footer=5, delimiter='|')
+        else:
+            data = np.genfromtxt(filepath, skip_header=2, skip_footer=4)
 
         return ACF(data[:, 1:4], data[:, 4])
 
     def get_charge(self,
-                   nele_per_isolated_atom: NDArray[Shape['Natoms'], Number]):
-        return nele_per_isolated_atom - self.nelec_per_atom
+                   nelec_per_isolated_atom: NDArray[Shape['Natoms'], Number] | None = None):
+        if nelec_per_isolated_atom is not None:
+            return nelec_per_isolated_atom - self.nelec_per_atom
+        else:
+            if self.nelec_per_isolated_atom is not None:
+                return self.nelec_per_isolated_atom - self.nelec_per_atom
+            else:
+                raise ValueError('nelec_per_isolated_atom should be defined either as argument of '
+                                 'this function or as self.nelec_per_isolated_atom')
 
     def get_delta_elec(self,
-                       nele_per_isolated_atom: NDArray[Shape['Natoms'], Number]):
-        return self.nelec_per_atom - nele_per_isolated_atom
+                       nelec_per_isolated_atom: NDArray[Shape['Natoms'], Number]):
+        return self.nelec_per_atom - nelec_per_isolated_atom
