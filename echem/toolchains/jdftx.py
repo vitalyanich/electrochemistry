@@ -1,5 +1,4 @@
 from pathlib import Path
-#from wsl_pathlib.path import WslPath
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
 from echem.io_data.ddec import Output_DDEC
@@ -8,7 +7,6 @@ from echem.core.constants import Hartree2eV, eV2Hartree, Bohr2Angstrom, Angstrom
 from echem.core.electronic_structure import EBS
 from monty.re import regrep
 from subprocess import Popen, PIPE
-#import subprocess
 from timeit import default_timer as timer
 from datetime import timedelta
 import matplotlib.pyplot as plt
@@ -226,7 +224,7 @@ class InfoExtractor:
                             string += str(i.real) + '+' + str(i.imag) + 'j, '
                     string = string[:-2]
                     string += ']'
-                    print(f'{len(output_phonons.phonons["zero"])} zero modes: {string}')
+                    print(f'\t{len(output_phonons.phonons["zero"])} zero modes: {string}')
 
                 if output_phonons.phonons['imag'] is not None:
                     string = '['
@@ -238,7 +236,7 @@ class InfoExtractor:
                             string += str(i.real) + '+' + str(i.imag) + 'j, '
                     string = string[:-2]
                     string += ']'
-                    print(f'{len(output_phonons.phonons["imag"])} imag modes: {string}')
+                    print(f'\t{len(output_phonons.phonons["imag"])} imag modes: {string}')
 
             output = None
         else:
@@ -311,7 +309,7 @@ class InfoExtractor:
                         fluidN.to_file(path_root_folder / (fluid_type + '.cube'))
 
             if self.ddec_params is not None and ('job_control.txt' not in files or recreate_files['ddec']):
-                print('Create job_control.txt for\t', colored(str(path_root_folder), attrs=['bold']))
+                print('Create job_control.txt for\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 charge = - (output.nelec_hist[-1] - output.nelec_pzc)
                 self.create_job_control(filepath=path_root_folder / 'job_control.txt',
                                         charge=charge,
@@ -322,7 +320,7 @@ class InfoExtractor:
                 nac_bader.nelec_per_isolated_atom = np.array([output.pseudopots[key] for key in
                                                               output.structure.species])
             elif self.do_bader:
-                print('Run Bader for\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
+                print('Run Bader for\t\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
 
                 string = str(path_root_folder.name.split('_')[1])
                 print_com = ''
@@ -346,24 +344,6 @@ class InfoExtractor:
                 p = Popen(com, cwd=path_root_folder)
                 p.wait()
 
-                #subprocess.run(["wsl", "~", "-e", "mkdir", path_root_folder.name])
-                #sp = subprocess.run(["wsl", "../bader", "-c", "bader", "-i", "cube",
-                #                     f"/{WslPath(path_root_folder).wsl_path}/valence_density.cube"],
-                #                    capture_output=True,
-                #                    cwd=rf'\\wsl.localhost\Ubuntu-22.04\home\v_linux\{path_root_folder.name}')
-
-                #if 'WRITING BADER ATOMIC CHARGES TO ACF.dat' not in sp.stdout.decode('UTF-8'):
-                #    print(colored('Can not do Bader charge analysis for', color='red', attrs=['bold']),
-                #          path_root_folder)
-                #    nac_bader = None
-                #else:
-                #    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/ACF.dat",
-                #                    f"/{WslPath(path_root_folder).wsl_path}/ACF.dat"])
-                #    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/AVF.dat",
-                #                    f"/{WslPath(path_root_folder).wsl_path}/AVF.dat"])
-                #    subprocess.run(["wsl", "~", "-e", "cp", f"{path_root_folder.name}/BCF.dat",
-                #                    f"/{WslPath(path_root_folder).wsl_path}/BCF.dat"])
-                #    subprocess.run(["wsl", "~", "-e", "rm", "-r", path_root_folder.name])
                 nac_bader = ACF.from_file(path_root_folder / 'ACF.dat')
                 nac_bader.nelec_per_isolated_atom = np.array([output.pseudopots[key] for key in
                                                               output.structure.species])
@@ -373,13 +353,13 @@ class InfoExtractor:
             if not recreate_files['ddec'] and 'valence_cube_DDEC_analysis.output' in files:
                 nac_ddec = Output_DDEC.from_file(path_root_folder / 'valence_cube_DDEC_analysis.output')
             elif self.ddec_params is not None and self.do_ddec:
-                print('Run DDEC for\t\t', colored(str(path_root_folder), attrs=['bold']))
+                print('Run DDEC for\t\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 start = timer()
 
                 p = Popen(str(self.ddec_params['path_ddec_executable']), stdin=PIPE, bufsize=0)
                 p.communicate(str(path_root_folder).encode('ascii'))
                 end = timer()
-                print(f'DDEC Finished! Elapsed time: {timedelta(seconds=end-start)}',
+                print(f'DDEC Finished! Elapsed time: {str(timedelta(seconds=end-start)).split(".")[0]}',
                       colored(str(path_root_folder), attrs=['bold']))
                 nac_ddec = Output_DDEC.from_file(path_root_folder / 'valence_cube_DDEC_analysis.output')
             else:
@@ -417,7 +397,7 @@ class InfoExtractor:
                                 string += str(i.real) + '+' + str(i.imag) + 'j, '
                         string = string[:-2]
                         string += ']'
-                        print(f'{len(output_phonons.phonons["zero"])} zero modes: {string}')
+                        print(f'\t{len(output_phonons.phonons["zero"])} zero modes: {string}')
 
                     if output_phonons.phonons['imag'] is not None:
                         string = '['
@@ -429,7 +409,7 @@ class InfoExtractor:
                                 string += str(i.real) + '+' + str(i.imag) + 'j, '
                         string = string[:-2]
                         string += ']'
-                        print(f'{len(output_phonons.phonons["imag"])} imag modes: {string}')
+                        print(f'\t{len(output_phonons.phonons["imag"])} imag modes: {string}')
 
         else:
             nac_ddec = None
