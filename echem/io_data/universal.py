@@ -226,6 +226,9 @@ class Cube:
                         f'  {ElemName2Num[atom_name]:{width_1_column}}   {charge:{width}.6f} '
                         f'  {coord[0]:{width}.6f}   {coord[1]:{width}.6f}   {coord[2]:{width}.6f}\n')
 
+            else:
+                raise ValueError(f'Irregular units flag: {units}. Units must be \'Bohr\' or \'Angstrom\'')
+
             if self.dset_ids is not None:
                 m = len(self.dset_ids)
                 file.write(f'  {m:{width_1_column}}' + '   ')

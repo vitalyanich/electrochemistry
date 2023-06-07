@@ -523,7 +523,7 @@ class InfoExtractor:
         if j == 0:
             i -= 1
 
-        fig, axs = plt.subplots(i, 3, figsize=(25, 5 * i), dpi=180)
+        fig, axs = plt.subplots(int(i), 3, figsize=(25, 5 * i), dpi=180)
         fig.subplots_adjust(wspace=0.3, hspace=0.2)
 
         for system, ax_e in zip(systems, axs.flatten()):

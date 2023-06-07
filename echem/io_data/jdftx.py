@@ -13,7 +13,7 @@ from typing_extensions import NotRequired
 from pathlib import Path
 import warnings
 import copy
-from nptyping import NDArray, Shape, Number, Complex, Float
+from nptyping import NDArray, Shape, Number
 from termcolor import colored
 
 
@@ -552,7 +552,7 @@ class Eigenvals(EBS_data):
 
     @staticmethod
     def from_file(filepath: str | Path,
-                  output: Output):
+                  output: Output) -> 'Eigenvals':
 
         if isinstance(filepath, str):
             filepath = Path(filepath)
@@ -582,7 +582,7 @@ class Fillings(EBS_data):
 
     @staticmethod
     def from_file(filepath: str | Path,
-                  output: Output):
+                  output: Output) -> 'Fillings':
 
         if isinstance(filepath, str):
             filepath = Path(filepath)
