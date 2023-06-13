@@ -504,6 +504,8 @@ class Output(IonicDynamics):
                 else:
                     n_transfer = np.sum(mask_real)
 
+                mods_for_transfer = None
+
                 if n_zero - n_transfer > n_leave:
                     print(colored(f'Can not leave', color='red', attrs=['bold']),
                           n_leave,
@@ -512,8 +514,16 @@ class Output(IonicDynamics):
                           colored('imaginary modes', color='red', attrs=['bold']))
                     print(colored('The following values can not be converted to real:', color='red', attrs=['bold']),
                           self.phonons['zero'][mask_complex])
+
+                    if np.any(mask_real):
+                        mods_for_transfer = np.sort(self.phonons['zero'][mask_real].real)
+                        print(colored('The following values will be converted to real:', color='red', attrs=['bold']),
+                              self.phonons['zero'][mask_real])
+
                 else:
                     mods_for_transfer = np.sort(self.phonons['zero'][mask_real].real)[-n_transfer:]
+
+                if mods_for_transfer is not None:
                     self.phonons['real'] = np.hstack((mods_for_transfer, self.phonons['real']))
                     del_indices = []
                     for mode in mods_for_transfer:

@@ -12,6 +12,10 @@ class ThermalProperties:
         weights (np.ndarray [nkpts, ], optional): weights of k-points. The sum of weights should be equal to 1.
         If weights are not provided, all k-points will be considered with equal weights (1 / nkpts).
     """
+    k_B_J = 1.380649e-23  # J/K
+    k_B_eV = 8.617333262e-5  # eV/K
+    hbar_J = 1.054571817e-34  # J*s
+
     def __init__(self,
                  eigen_freq: NDArray[Shape['Nkpts, Nfreq'], Number],
                  weights: NDArray[Shape['Nkpts'], Number] = None):
@@ -79,3 +83,20 @@ class ThermalProperties:
 
     def get_E_tot(self, T) -> float:
         return self.get_E_zpe() + self.get_E_temp(T) - self.get_TS(T)
+
+    @classmethod
+    def get_Gibbs_trans(cls, V, T):
+        pass
+
+    @classmethod
+    def get_Gibbs_rot(cls,
+                      I: float | list[float] | NDArray[Shape['3'], Number],
+                      sigma: int,
+                      T: float):
+        if len(I) == 1:
+            return cls.k_B_eV * T * np.log(2 * I * cls.k_B_J * T / (sigma * cls.hbar_J ** 2))
+        elif len(I) == 3:
+            return cls.k_B_eV * T * np.log((2 * cls.k_B_J * T)**1.5 * (np.pi * I[0] * I[1] * I[2])**0.5) / \
+                (sigma * cls.hbar_J**3)
+        else:
+            raise ValueError(f'I should be either float or array with length of 3, however {len(I)=}')
