@@ -19,8 +19,16 @@ Hartree2eV = 27.2114
 eV2Hartree = 1 / Hartree2eV
 THz2eV = 4.136e-3
 eV2THz = 1 / THz2eV
+amu2kg = 1.6605402e-27
 
 PLANCK_CONSTANT = 4.135667662e-15  # Planck's constant in eV*s
 BOLTZMANN_CONSTANT = 8.617333262145e-5  # Boltzmann's constant in eV/K
 ELEM_CHARGE = 1.60217662e-19  # Elementary charge in Coulombs
 BOHR_RADIUS = 1.88973 #TODO Check
+
+Bader_radii_Bohr = {'H': 2.88, 'He': 2.5, 'Li': 4.18, 'Be': 4.17, 'B': 3.91, 'C': 3.62, 'N': 3.35, 'O': 3.18,
+                    'F': 3.03, 'Ne': 2.89, 'Na': 4.25, 'Mg': 4.6, 'Al': 4.61, 'Si': 4.45, 'P': 4.23, 'S': 4.07,
+                    'Cl': 3.91, 'Ar': 3.72, 'Li_plus': 1.82, 'Na_plus': 2.47, 'F_minus': 3.49, 'Cl_minus': 4.36}
+
+IDSCRF_radii_Angstrom = {'H': 1.77, 'He': 1.49, 'Li': 2.22, 'Be': 2.19, 'B': 2.38, 'C': 2.22, 'N': 2.05, 'O': 1.87,
+                         'F': 1.89, 'Ne': 1.74}

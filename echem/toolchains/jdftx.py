@@ -3,7 +3,8 @@ from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
 from echem.io_data.ddec import Output_DDEC
 from echem.io_data.bader import ACF
-from echem.core.constants import Hartree2eV, eV2Hartree, Bohr2Angstrom, Angstrom2Bohr
+from echem.core.constants import Hartree2eV, eV2Hartree, Bohr2Angstrom, Angstrom2Bohr, \
+    Bader_radii_Bohr, IDSCRF_radii_Angstrom
 from echem.core.electronic_structure import EBS
 from monty.re import regrep
 from subprocess import Popen, PIPE
@@ -30,6 +31,7 @@ class System(TypedDict):
     output_phonons: Output | None
     dos: EBS | None
     nac_bader: ACF | None
+    excluded_volumes: dict[Literal['cavity', 'molecule', 'free'], float] | None
 
 
 class DDEC_params(TypedDict):
@@ -46,6 +48,7 @@ class InfoExtractor:
     def __init__(self,
                  ddec_params: DDEC_params = None,
                  path_bader_executable: Path | str = None,
+                 path_arvo_executable: Path | str = None,
                  systems: list[System] = None,
                  output_name: str = 'output.out',
                  jdftx_prefix: str = 'jdft',
@@ -64,12 +67,16 @@ class InfoExtractor:
         if isinstance(path_bader_executable, str):
             path_bader_executable = Path(path_bader_executable)
 
+        if isinstance(path_arvo_executable, str):
+            path_arvo_executable = Path(path_arvo_executable)
+
         self.output_name = output_name
         self.jdftx_prefix = jdftx_prefix
         self.do_ddec = do_ddec
         self.ddec_params = ddec_params
         self.do_bader = do_bader
         self.path_bader_executable = path_bader_executable
+        self.path_arvo_executable = path_arvo_executable
 
         self.lock = Lock()
 
@@ -163,7 +170,7 @@ class InfoExtractor:
 
     def get_info_multiple(self,
                           path_root_folder: str | Path,
-                          recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes'], bool] = None,
+                          recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
                           num_workers: int = 1) -> None:
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
@@ -179,13 +186,13 @@ class InfoExtractor:
 
     def get_info(self,
                  path_root_folder: str | Path,
-                 recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes'], bool] = None) -> None:
+                 recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None) -> None:
 
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
 
         if recreate_files is None:
-            recreate_files = {'bader': False, 'ddec': False, 'cars': False, 'cubes': False}
+            recreate_files = {'bader': False, 'ddec': False, 'cars': False, 'cubes': False, 'volumes': False}
         else:
             if 'bader' not in recreate_files:
                 recreate_files['bader'] = False
@@ -195,6 +202,8 @@ class InfoExtractor:
                 recreate_files['cars'] = False
             if 'cubes' not in recreate_files:
                 recreate_files['cubes'] = False
+            if 'volumes' not in recreate_files:
+                recreate_files['volumes'] = False
 
         files = [file.name for file in path_root_folder.iterdir() if file.is_file()]
 
@@ -411,6 +420,43 @@ class InfoExtractor:
                         string += ']'
                         print(f'\t{len(output_phonons.phonons["imag"])} imag modes: {string}')
 
+            if substrate == 'Mol':
+                if 'bader.ats' not in files or recreate_files['volumes']:
+                    file = open(path_root_folder / 'bader.ats', 'w')
+                    for name, coord in zip(output.structure.species, output.structure.coords):
+                        file.write(f'  {coord[0]}  {coord[1]}  {coord[2]}  {Bader_radii_Bohr[name] * Bohr2Angstrom}\n')
+                    file.close()
+
+                if 'idscrf.ats' not in files or recreate_files['volumes']:
+                    file = open(path_root_folder / 'idscrf.ats', 'w')
+                    for name, coord in zip(output.structure.species, output.structure.coords):
+                        file.write(f'  {coord[0]}  {coord[1]}  {coord[2]}  {IDSCRF_radii_Angstrom[name]}\n')
+                    file.close()
+
+                if 'arvo.bader.log' not in files or recreate_files['volumes']:
+                    print('Run ARVO.bader for\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
+                    com = str(self.path_arvo_executable) + ' protein=bader.ats log=arvo.bader.log'
+                    p = Popen(com, cwd=path_root_folder)
+                    p.wait()
+
+                if 'arvo.idscrf.log' not in files or recreate_files['volumes']:
+                    print('Run ARVO.idscrf for\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
+                    com = str(self.path_arvo_executable) + ' protein=idscrf.ats log=arvo.idscrf.log'
+                    p = Popen(com, cwd=path_root_folder)
+                    p.wait()
+
+                excluded_volumes = {}
+                file = open(path_root_folder / 'arvo.bader.log')
+                excluded_volumes['molecule'] = float(file.readline().split()[1])
+                file.close()
+                file = open(path_root_folder / 'arvo.idscrf.log')
+                excluded_volumes['cavity'] = float(file.readline().split()[1])
+                file.close()
+                excluded_volumes['free'] = (excluded_volumes['cavity']**(1/3) - excluded_volumes['molecule']**(1/3))**3
+
+            else:
+                excluded_volumes = None
+
         else:
             nac_ddec = None
             nac_bader = None
@@ -427,6 +473,7 @@ class InfoExtractor:
                 system_proccessed[0]['nac_ddec'] = nac_ddec
                 system_proccessed[0]['dos'] = dos
                 system_proccessed[0]['nac_bader'] = nac_bader
+                system_proccessed[0]['excluded_volumes'] = excluded_volumes
 
             self.lock.release()
 
@@ -438,7 +485,8 @@ class InfoExtractor:
                               'nac_ddec': nac_ddec,
                               'output_phonons': output_phonons,
                               'dos': dos,
-                              'nac_bader': nac_bader}
+                              'nac_bader': nac_bader,
+                              'excluded_volumes': excluded_volumes}
 
             self.systems.append(system)
             self.lock.release()
@@ -511,7 +559,7 @@ class InfoExtractor:
         return self.get_system(substrate, adsorbate, idx)[0]['output'].mu
 
     def get_E_vib_tot(self, substrate: str, adsorbate: str, idx: int, T: float) -> float:
-        return self.get_system(substrate, adsorbate, idx)[0]['output_phonons'].thermal_props.get_E_tot(T)
+        return self.get_system(substrate, adsorbate, idx)[0]['output_phonons'].thermal_props.get_Gibbs_vib(T)
 
     def plot_energy(self, substrate: str, adsorbate: str):
 

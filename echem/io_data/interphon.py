@@ -194,7 +194,7 @@ class InterPhonInterface(ThermalProperties):
 
         return self.eigen_freq
 
-    def get_E_zpe(self) -> float:
+    def get_Gibbs_ZPE(self) -> float:
         if self.eigen_freq is None:
             self._make_postprocess(folder_to_disps=self.folder_to_jdftx_files,
                                    filepath_unitcell=self.folder_to_jdftx_files / 'POSCAR_unitcell_InterPhon',
@@ -202,9 +202,20 @@ class InterPhonInterface(ThermalProperties):
                                    filepath_kpoints=self.folder_to_jdftx_files / 'KPOINTS',
                                    user_args=self.user_args,
                                    sym_flag=self.sym_flag)
-        return ThermalProperties.get_E_zpe(self)
+        return ThermalProperties.get_Gibbs_ZPE(self)
 
-    def get_E_temp(self,
+    def get_enthalpy_vib(self,
+                         T: float) -> float:
+        if self.eigen_freq is None:
+            self._make_postprocess(folder_to_disps=self.folder_to_jdftx_files,
+                                   filepath_unitcell=self.folder_to_jdftx_files / 'POSCAR_unitcell_InterPhon',
+                                   filepath_supercell=self.folder_to_jdftx_files / 'POSCAR_supercell_InterPhon',
+                                   filepath_kpoints=self.folder_to_jdftx_files / 'KPOINTS',
+                                   user_args=self.user_args,
+                                   sym_flag=self.sym_flag)
+        return ThermalProperties.get_enthalpy_vib(self, T)
+
+    def get_TS_vib(self,
                    T: float) -> float:
         if self.eigen_freq is None:
             self._make_postprocess(folder_to_disps=self.folder_to_jdftx_files,
@@ -213,15 +224,4 @@ class InterPhonInterface(ThermalProperties):
                                    filepath_kpoints=self.folder_to_jdftx_files / 'KPOINTS',
                                    user_args=self.user_args,
                                    sym_flag=self.sym_flag)
-        return ThermalProperties.get_E_temp(self, T)
-
-    def get_TS(self,
-               T: float) -> float:
-        if self.eigen_freq is None:
-            self._make_postprocess(folder_to_disps=self.folder_to_jdftx_files,
-                                   filepath_unitcell=self.folder_to_jdftx_files / 'POSCAR_unitcell_InterPhon',
-                                   filepath_supercell=self.folder_to_jdftx_files / 'POSCAR_supercell_InterPhon',
-                                   filepath_kpoints=self.folder_to_jdftx_files / 'KPOINTS',
-                                   user_args=self.user_args,
-                                   sym_flag=self.sym_flag)
-        return ThermalProperties.get_TS(self, T)
+        return ThermalProperties.get_TS_vib(self, T)

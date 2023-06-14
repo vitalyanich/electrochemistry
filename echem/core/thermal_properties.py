@@ -31,7 +31,7 @@ class ThermalProperties:
                           f'\nImaginary frequencies: {eigen_freq[eigen_freq < 0]}')
         self.eigen_freq = np.maximum(0, eigen_freq)
 
-    def get_E_zpe(self) -> float:
+    def get_Gibbs_ZPE(self) -> float:
         r"""
         Calculate Zero Point Energy
 
@@ -43,7 +43,7 @@ class ThermalProperties:
         """
         return np.sum(self.weights * self.eigen_freq) / 2
 
-    def get_E_temp(self, T) -> float:
+    def get_enthalpy_vib(self, T) -> float:
         r"""
         Calculate the thermal term in vibrational energy
 
@@ -60,7 +60,7 @@ class ThermalProperties:
 
         return np.sum(np.nan_to_num(self.weights * self.eigen_freq / (np.exp(self.eigen_freq / (k_B * T)) - 1)))
 
-    def get_TS(self, T) -> float:
+    def get_TS_vib(self, T) -> float:
         r"""
         Calculate the vibrational entropy contribution
 
@@ -79,24 +79,27 @@ class ThermalProperties:
         k_B = 8.617333262145e-5  # Boltzmann's constant in eV/K
         second_term = - np.sum(self.weights * k_B * T * np.nan_to_num(np.log(1 - np.exp(- self.eigen_freq / (k_B * T))),
                                                                       neginf=0))
-        return self.get_E_temp(T) + second_term
+        return self.get_enthalpy_vib(T) + second_term
 
-    def get_E_tot(self, T) -> float:
-        return self.get_E_zpe() + self.get_E_temp(T) - self.get_TS(T)
+    def get_Gibbs_vib(self, T: float) -> float:
+        return self.get_Gibbs_ZPE() + self.get_enthalpy_vib(T) - self.get_TS_vib(T)
 
     @classmethod
-    def get_Gibbs_trans(cls, V, T):
-        pass
+    def get_Gibbs_trans(cls,
+                        V: float,
+                        mass: float,
+                        T: float):
+        return - cls.k_B_eV * T * np.log(V * (mass * cls.k_B_J * T / (2 * np.pi * cls.hbar_J**2))**1.5)
 
     @classmethod
     def get_Gibbs_rot(cls,
                       I: float | list[float] | NDArray[Shape['3'], Number],
                       sigma: int,
                       T: float):
-        if len(I) == 1:
-            return cls.k_B_eV * T * np.log(2 * I * cls.k_B_J * T / (sigma * cls.hbar_J ** 2))
+        if type(I) is float or len(I) == 1:
+            return - cls.k_B_eV * T * np.log(2 * I * cls.k_B_J * T / (sigma * cls.hbar_J ** 2))
         elif len(I) == 3:
-            return cls.k_B_eV * T * np.log((2 * cls.k_B_J * T)**1.5 * (np.pi * I[0] * I[1] * I[2])**0.5) / \
-                (sigma * cls.hbar_J**3)
+            return - cls.k_B_eV * T * np.log((2 * cls.k_B_J * T)**1.5 * (np.pi * I[0] * I[1] * I[2])**0.5 /
+                                           (sigma * cls.hbar_J**3))
         else:
             raise ValueError(f'I should be either float or array with length of 3, however {len(I)=}')
