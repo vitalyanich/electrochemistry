@@ -461,6 +461,7 @@ class InfoExtractor:
             nac_ddec = None
             nac_bader = None
             dos = None
+            excluded_volumes = None
 
         self.lock.acquire()
 
@@ -519,7 +520,7 @@ class InfoExtractor:
                 raise ValueError(f'units should be "Ha" or "eV" however "{units}" was given')
         elif isinstance(T, float | int):
             E = self.get_system(substrate, adsorbate, idx)[0]['output'].energy_ionic_hist['F'][-1]
-            E_vib = self.get_E_vib_tot(substrate, adsorbate, idx, T)
+            E_vib = self.get_Gibbs_vib(substrate, adsorbate, idx, T)
             if units == 'Ha':
                 return E + E_vib * eV2Hartree
             elif units == 'eV':
@@ -542,7 +543,7 @@ class InfoExtractor:
                 raise ValueError(f'units should be "Ha" or "eV" however "{units}" was given')
         elif isinstance(T, float | int):
             E = self.get_system(substrate, adsorbate, idx)[0]['output'].energy_ionic_hist['G'][-1]
-            E_vib = self.get_E_vib_tot(substrate, adsorbate, idx, T)
+            E_vib = self.get_Gibbs_vib(substrate, adsorbate, idx, T)
             if units == 'Ha':
                 return E + E_vib * eV2Hartree
             elif units == 'eV':
@@ -558,7 +559,7 @@ class InfoExtractor:
     def get_mu(self, substrate: str, adsorbate: str, idx: int) -> float:
         return self.get_system(substrate, adsorbate, idx)[0]['output'].mu
 
-    def get_E_vib_tot(self, substrate: str, adsorbate: str, idx: int, T: float) -> float:
+    def get_Gibbs_vib(self, substrate: str, adsorbate: str, idx: int, T: float) -> float:
         return self.get_system(substrate, adsorbate, idx)[0]['output_phonons'].thermal_props.get_Gibbs_vib(T)
 
     def plot_energy(self, substrate: str, adsorbate: str):
