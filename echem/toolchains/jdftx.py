@@ -287,6 +287,7 @@ class InfoExtractor:
                                                     output.structure).convert_to_cube()
                     n = n_up + n_dn
                     n.to_file(path_root_folder / 'valence_density.cube')
+                    valence_density_exist = True
 
                     if output.magnetization_abs > 1e-2:
                         n = n_up - n_dn
@@ -297,9 +298,13 @@ class InfoExtractor:
                                                  fft_box_size,
                                                  output.structure).convert_to_cube()
                     n.to_file(path_root_folder / 'valence_density.cube')
+                    valence_density_exist = True
                 else:
                     print(colored('(!) There is no files for valence(spin)_density.cube creation',
                                   color='red', attrs=['bold']))
+                    valence_density_exist = False
+            else:
+                valence_density_exist = True
 
             if ('nbound.cube' not in files or recreate_files['cubes']) and f'{self.jdftx_prefix}.nbound' in files:
                 print('Create nbound.cube for\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
@@ -328,7 +333,7 @@ class InfoExtractor:
                 nac_bader = ACF.from_file(path_root_folder / 'ACF.dat')
                 nac_bader.nelec_per_isolated_atom = np.array([output.pseudopots[key] for key in
                                                               output.structure.species])
-            elif self.do_bader:
+            elif self.do_bader and valence_density_exist:
                 print('Run Bader for\t\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
 
                 string = str(path_root_folder.name.split('_')[1])
@@ -361,7 +366,7 @@ class InfoExtractor:
 
             if not recreate_files['ddec'] and 'valence_cube_DDEC_analysis.output' in files:
                 nac_ddec = Output_DDEC.from_file(path_root_folder / 'valence_cube_DDEC_analysis.output')
-            elif self.ddec_params is not None and self.do_ddec:
+            elif self.ddec_params is not None and self.do_ddec and valence_density_exist:
                 print('Run DDEC for\t\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
                 start = timer()
 

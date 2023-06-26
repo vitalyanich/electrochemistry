@@ -839,7 +839,7 @@ class BandProjections:
             for iband, line in enumerate(range(start + 1, stop)):
                 proj_coeffs[ispin, ikpt, iband] = [float(k) for k in data[line].split()]
 
-        return BandProjections(proj_coeffs, weights, species, norbs_per_atomtype, orbs_names, orbs_data)
+        return BandProjections(proj_coeffs, weights / 2, species, norbs_per_atomtype, orbs_names, orbs_data)
 
     def get_PDOS(self,
                  atom_numbers: list[int] | int,
@@ -892,13 +892,19 @@ class BandProjections:
         PDOS_arr = np.zeros((self.nspin, len(idxs), ngrid))
         for spin in range(self.nspin):
             for idx in range(len(idxs)):
-                PDOS_arr[spin, idx] = np.sum(G_arr[spin, :, :, :] * W_arr[spin, idx, :, :, None],
-                                             axis=(0, 1))
+               PDOS_arr[spin, idx] = np.sum(G_arr[spin, :, :, :] * W_arr[spin, idx, :, :, None],
+                                            axis=(0, 1))
 
         if self.nspin == 1:
             PDOS_arr *= 2
 
         if get_orbs_names:
-            return E_arr, PDOS_arr, [self.orbs_names[i] for i in idxs]
+            if zero_at_fermi:
+                return E_arr - efermi, PDOS_arr, [self.orbs_names[i] for i in idxs]
+            else:
+                return E_arr, PDOS_arr, [self.orbs_names[i] for i in idxs]
         else:
-            return E_arr, PDOS_arr
+            if zero_at_fermi:
+                return E_arr - efermi, PDOS_arr
+            else:
+                return E_arr, PDOS_arr
