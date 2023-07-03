@@ -341,7 +341,7 @@ class InfoExtractor:
                 if string != 'Pristine':
                     print_com += ' -o atoms'
                     length = len(re.findall(r'[A-Z]', string))
-                    ints = [int(i) for i in re.findall(r'[2-9]', string)]
+                    ints = [int(i) for i in re.findall(r'[2-9]', re.sub(r'minus\d+.\d+|plus\d+.\d+', '', string))]
                     length += sum(ints) - len(ints)
                     while length > 0:
                         print_com += f' -i {output.structure.natoms + 1 - length}'

@@ -63,6 +63,18 @@ class Cube:
     def __neg__(self):
         return Cube(-self.volumetric_data, self.structure, self.origin)
 
+    def __mul__(self, other):
+        assert isinstance(other, Cube), 'Other object must belong to Cube class'
+        assert np.array_equal(self.origin, other.origin), 'Two Cube instances must have the same origin'
+        assert self.volumetric_data.shape == other.volumetric_data.shape, 'Two Cube instances must have ' \
+                                                                          'the same shape of volumetric_data'
+        if self.structure != other.structure:
+            warnings.warn('\nTwo Cube instances have different structures. '
+                          'The structure will be taken from the 1st (self) instance. '
+                          'Hope you know, what you are doing')
+
+        return Cube(self.volumetric_data * other.volumetric_data, self.structure, self.origin)
+
     @staticmethod
     def from_file(filepath):
         with open(filepath, 'rt') as file:
