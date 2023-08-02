@@ -22,7 +22,8 @@ def shell(cmd) -> str:
 class JDFTx(Calculator):
     def __init__(self,
                  path_jdftx_executable: str | Path,
-                 path_pseudopotentials: str | Path,
+                 path_rundir: str | Path | None = None,
+                 folderpath_pseudopots: str | Path | None = None,
                  pseudoSet: Literal['SG15', 'GBRV', 'GBRV-pbe', 'GBRV-lda', 'GBRV-pbesol'] = 'GBRV',
                  commands: dict[str, str | int | float] | list[tuple[str, str | int | float]] = None,
                  jdftx_prefix: str = 'jdft',
@@ -37,10 +38,20 @@ class JDFTx(Calculator):
             self.path_jdftx_executable = Path(path_jdftx_executable)
         else:
             self.path_jdftx_executable = path_jdftx_executable
-        if isinstance(path_pseudopotentials, str):
-            self.path_pseudopotentials = Path(path_pseudopotentials)
+
+        if isinstance(folderpath_pseudopots, str):
+            self.folderpath_pseudopots = Path(folderpath_pseudopots)
         else:
-            self.path_pseudopotentials = path_pseudopotentials
+            self.folderpath_pseudopots = folderpath_pseudopots
+
+        if isinstance(path_rundir, str):
+            self.path_rundir = Path(path_rundir)
+        elif isinstance(path_rundir, Path):
+            self.path_rundir = path_rundir
+        elif path_rundir is None:
+            self.path_rundir = Path(tempfile.mkdtemp())
+        else:
+            raise ValueError(f'path_rundir should be str or Path or None, however you set {path_rundir=}')
 
         self.jdftx_prefix = jdftx_prefix
         self.output_name = output_name
@@ -65,8 +76,7 @@ class JDFTx(Calculator):
         for cmd, v in commands:
             self.addCommand(cmd, v)
 
-        # Accepted pseudopotential formats
-        self.pseudopotentials = ['fhi', 'uspp', 'upf']
+        self.supported_pseudo_formats = ['fhi', 'uspp', 'upf']
 
         # Current results
         self.E = None
@@ -76,22 +86,18 @@ class JDFTx(Calculator):
         self.lastAtoms = None
         self.lastInput = None
 
-        # k-points
         self.kpoints = None
 
-        # Dumps
         self.dumps = []
         self.addDump("End", "State")
         self.addDump("End", "Forces")
         self.addDump("End", "Ecomponents")
 
-        # Run directory:
-        self.runDir = tempfile.mkdtemp()
-        print('Set up JDFTx calculator with run files in \'' + self.runDir + '\'')
+        print(f'Set up JDFTx calculator with run files in \'{self.path_rundir}\'')
 
     def validCommand(self, command) -> bool:
         """ Checks whether the input string is a valid jdftx command \nby comparing to the input template (jdft -t)"""
-        if (type(command) != str):
+        if type(command) != str:
             raise IOError('Please enter a string as the name of the command!\n')
         return command in self.acceptableCommands
 
@@ -166,24 +172,24 @@ class JDFTx(Calculator):
 
     def runJDFTx(self, inputfile):
         """ Runs a JDFTx calculation """
-        file = open(self.runDir + 'input.in', 'w')
+        file = open(self.path_rundir / 'input.in', 'w')
         file.write(inputfile)
         file.close()
 
-        shell(f'cd {self.runDir} && {self.path_jdftx_executable} -i input.in -o {self.output_name}')
+        shell(f'cd {self.path_rundir} && {self.path_jdftx_executable} -i input.in -o {self.output_name}')
 
-        self.E = self.__readEnergy(f'{self.runDir}/Ecomponents')
-        self.forces = self.__readForces(f'{self.runDir}/force')
+        self.E = self.__readEnergy(self.path_rundir / 'Ecomponents')
+        self.forces = self.__readForces(self.path_rundir / 'force')
 
     def constructInput(self, atoms) -> str:
         """Constructs a JDFTx input string using the input atoms and the input file arguments (kwargs) in self.input"""
         inputfile = ''
 
-        R = atoms.get_cell() * Angstrom2Bohr
+        lattice = atoms.get_cell() * Angstrom2Bohr
         inputfile += 'lattice \\\n'
         for i in range(3):
             for j in range(3):
-                inputfile += '%f  ' % (R[j, i])
+                inputfile += '%f  ' % (lattice[j, i])
             if i != 2:
                 inputfile += '\\'
             inputfile += '\n'
@@ -205,14 +211,14 @@ class JDFTx(Calculator):
             inputfile += 'ion %s %f %f %f \t 1\n' % (species[i], coords[i][0], coords[i][1], coords[i][2])
 
         inputfile += '\n'
-        if not (self.path_pseudopotentials is None):
+        if self.folderpath_pseudopots is not None:
             added = []  # List of pseudopotential that have already been added
             for atom in species:
                 if sum([x == atom for x in added]) == 0.:  # Add ion-species command if not already added
-                    for filetype in self.pseudopotentials:
+                    for filetype in self.supported_pseudo_formats:
                         try:
-                            shell('ls %s | grep %s.%s' % (self.path_pseudopotentials, atom, filetype))
-                            inputfile += 'ion-species %s/%s.%s\n' % (self.path_pseudopotentials, atom, filetype)
+                            shell(f'ls {self.folderpath_pseudopots} | grep {atom}.{filetype}')
+                            inputfile += f'ion-species {self.folderpath_pseudopots}/{atom}.{filetype}\n'
                             added.append(atom)
                             break
                         except:
