@@ -24,12 +24,13 @@ class NEB_JDFTx:
                  output_name: str = 'output.out',
                  cNEB: bool = True,
                  spring_constant: float = 0.1):
-        self.init_ionpos = init_ionpos,
-        self.init_lattice = init_lattice,
-        self.final_ionpos = final_ionpos,
-        self.final_lattice = final_lattice,
-        self.nimages = nimages,
-        self.jdftx_input = jdftx_input,
+
+        self.init_ionpos = init_ionpos
+        self.init_lattice = init_lattice
+        self.final_ionpos = final_ionpos
+        self.final_lattice = final_lattice
+        self.nimages = nimages
+        self.jdftx_input = jdftx_input
 
         if isinstance(path_jdftx_executable, str):
             self.path_jdftx_executable = Path(path_jdftx_executable)

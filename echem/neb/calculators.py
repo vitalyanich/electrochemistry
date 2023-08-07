@@ -52,14 +52,16 @@ class JDFTx(Calculator):
             self.acceptableCommands.add(match)
 
         self.dumps = []
+        self.input = [('dump-name', f'{self.jdftx_prefix}.$VAR'),
+                      ('initial-state', f'{self.jdftx_prefix}.$VAR')]
 
         if commands is not None:
             for com, val in commands:
                 if com == 'dump-name':
-                    logging.info(f'You set dump-name command in commands = {val},'
+                    logging.info(f'You set dump-name command in commands = {val}, '
                                  f'however it will be replaced with {self.jdftx_prefix}.$VAR')
                 elif com == 'initial-state':
-                    logging.info(f'You set initial-state command in commands = {val},'
+                    logging.info(f'You set initial-state command in commands = {val}, '
                                  f'however it will be replaced with {self.jdftx_prefix}.$VAR')
                 elif com == 'dump':
                     self.addDump(val.split()[0], val.split()[1])
@@ -72,9 +74,6 @@ class JDFTx(Calculator):
             self.addDump("End", "Forces")
         if ('End', 'Ecomponents') not in self.dumps:
             self.addDump("End", "Ecomponents")
-
-        self.input = [('dump-name', f'{self.jdftx_prefix}.$VAR'),
-                      ('initial-state', f'{self.jdftx_prefix}.$VAR')]
 
         # Current results
         self.E = None
