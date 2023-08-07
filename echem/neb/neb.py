@@ -6,6 +6,7 @@ from echem.io_data.jdftx import Ionpos, Lattice, Input
 from pathlib import Path
 import os
 import logging
+from ase.autoneb import AutoNEB
 logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
                     filemode="w", format="%(asctime)s %(levelname)s %(message)s")
 
@@ -75,3 +76,43 @@ class NEB_JDFTx:
     def run(self):
         self.prepare()
         self.optimizer.run(fmax=0.04)
+
+
+class AutoNEB_JDFTx:
+    def __init__(self, commands,
+                 prefix,
+                 n_max,
+                 path_jdftx_executable,
+                 climb=True,
+                 fmax=0.05,
+                 maxsteps=100,
+                 k=0.1,
+                 method='eb',
+                 optimizer=FIRE,
+                 space_energy_ratio=0.5,
+                 interpolation_method='idpp'):
+        self.path_jdftx_executable = path_jdftx_executable
+        self.commands = commands
+        self.autoneb = AutoNEB(self.attach_calculators,
+                               prefix=prefix,
+                               n_simul=1,
+                               n_max=n_max,
+                               climb=climb,
+                               fmax=fmax,
+                               maxsteps=maxsteps,
+                               k=k,
+                               method=method,
+                               optimizer=optimizer,
+                               space_energy_ratio=space_energy_ratio,
+                               world=None, parallel=True, smooth_curve=smooth_curve,
+                               interpolate_method=interpolation_method)
+
+    def attach_calculators(self, images):
+        for i, image in enumerate(images[1:-1]):
+            path_rundir = self.autoneb.iter_folder / i
+            path_rundir.mkdir(exist_ok=True)
+            image.calc = JDFTx(self.path_jdftx_executable,
+                               path_rundir=path_rundir,
+                               commands=self.commands)
+    def run(self):
+        self.autoneb.run()
