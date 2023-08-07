@@ -3,9 +3,9 @@ import tempfile
 import re
 import numpy as np
 from ase.calculators.interface import Calculator
-from typing import Literal
 from echem.core.constants import Hartree2eV, Angstrom2Bohr, Bohr2Angstrom
 from pathlib import Path
+import logging
 
 
 def shell(cmd) -> str:
@@ -23,26 +23,16 @@ class JDFTx(Calculator):
     def __init__(self,
                  path_jdftx_executable: str | Path,
                  path_rundir: str | Path | None = None,
-                 folderpath_pseudopots: str | Path | None = None,
-                 pseudoSet: Literal['SG15', 'GBRV', 'GBRV-pbe', 'GBRV-lda', 'GBRV-pbesol'] = 'GBRV',
-                 commands: dict[str, str | int | float] | list[tuple[str, str | int | float]] = None,
+                 commands: list[tuple[str, str]] = None,
                  jdftx_prefix: str = 'jdft',
                  output_name: str = 'output.out'):
-        pseudoSetMap = {'SG15':         'SG15/$ID_ONCV_PBE.upf',
-                        'GBRV':         'GBRV/$ID_pbe.uspp',
-                        'GBRV-pbe':     'GBRV/$ID_pbe.uspp',
-                        'GBRV-lda':     'GBRV/$ID_lda.uspp',
-                        'GBRV-pbesol':  'GBRV/$ID_pbesol.uspp'}
+
+        self.logger = logging.getLogger('JDFTx')
 
         if isinstance(path_jdftx_executable, str):
             self.path_jdftx_executable = Path(path_jdftx_executable)
         else:
             self.path_jdftx_executable = path_jdftx_executable
-
-        if isinstance(folderpath_pseudopots, str):
-            self.folderpath_pseudopots = Path(folderpath_pseudopots)
-        else:
-            self.folderpath_pseudopots = folderpath_pseudopots
 
         if isinstance(path_rundir, str):
             self.path_rundir = Path(path_rundir)
@@ -56,27 +46,35 @@ class JDFTx(Calculator):
         self.jdftx_prefix = jdftx_prefix
         self.output_name = output_name
 
-        if pseudoSet in pseudoSetMap:
-            self.pseudoSetCmd = 'ion-species ' + pseudoSetMap[pseudoSet]
-        else:
-            self.pseudoSetCmd = ''
-
         self.acceptableCommands = {'electronic-SCF'}
         template = str(shell(f'{self.path_jdftx_executable} -t'))
         for match in re.findall(r"# (\S+) ", template):
             self.acceptableCommands.add(match)
 
+        self.dumps = []
+
+        if commands is not None:
+            for com, val in commands:
+                if com == 'dump-name':
+                    logging.info(f'You set dump-name command in commands = {val},'
+                                 f'however it will be replaced with {self.jdftx_prefix}.$VAR')
+                elif com == 'initial-state':
+                    logging.info(f'You set initial-state command in commands = {val},'
+                                 f'however it will be replaced with {self.jdftx_prefix}.$VAR')
+                elif com == 'dump':
+                    self.addDump(val.split()[0], val.split()[1])
+                else:
+                    self.addCommand(com, val)
+
+        if ('End', 'State') not in self.dumps:
+            self.addDump("End", "State")
+        if ('End', 'Forces') not in self.dumps:
+            self.addDump("End", "Forces")
+        if ('End', 'Ecomponents') not in self.dumps:
+            self.addDump("End", "Ecomponents")
+
         self.input = [('dump-name', f'{self.jdftx_prefix}.$VAR'),
                       ('initial-state', f'{self.jdftx_prefix}.$VAR')]
-
-        if isinstance(commands, dict):
-            commands = commands.items()
-        elif commands is None:
-            commands = []
-        for cmd, v in commands:
-            self.addCommand(cmd, v)
-
-        self.supported_pseudo_formats = ['fhi', 'uspp', 'upf']
 
         # Current results
         self.E = None
@@ -86,14 +84,7 @@ class JDFTx(Calculator):
         self.lastAtoms = None
         self.lastInput = None
 
-        self.kpoints = None
-
-        self.dumps = []
-        self.addDump("End", "State")
-        self.addDump("End", "Forces")
-        self.addDump("End", "Ecomponents")
-
-        print(f'Set up JDFTx calculator with run files in \'{self.path_rundir}\'')
+        logging.info(f'Successfully initialized JDFTx calculator in \'{self.path_rundir}\'')
 
     def validCommand(self, command) -> bool:
         """ Checks whether the input string is a valid jdftx command \nby comparing to the input template (jdft -t)"""
@@ -109,12 +100,6 @@ class JDFTx(Calculator):
 
     def addDump(self, when, what) -> None:
         self.dumps.append((when, what))
-
-    def addKPoint(self, pt, w=1) -> None:
-        b1, b2, b3 = pt
-        if self.kpoints is None:
-            self.kpoints = []
-        self.kpoints.append((b1, b2, b3, w))
 
     def __readEnergy(self,
                      filepath: str | Path) -> float:
@@ -200,30 +185,11 @@ class JDFTx(Calculator):
         for cmd, v in self.input:
             inputfile += '%s %s\n' % (cmd, str(v))
 
-        if self.kpoints:
-            for pt in self.kpoints:
-                inputfile += 'kpoint %.8f %.8f %.8f %.14f\n' % pt
-
         coords = [x * Bohr2Angstrom for x in list(atoms.get_positions())]
         species = atoms.get_chemical_symbols()
         inputfile += '\ncoords-type cartesian\n'
         for i in range(len(coords)):
             inputfile += 'ion %s %f %f %f \t 1\n' % (species[i], coords[i][0], coords[i][1], coords[i][2])
-
-        inputfile += '\n'
-        if self.folderpath_pseudopots is not None:
-            added = []  # List of pseudopotential that have already been added
-            for atom in species:
-                if sum([x == atom for x in added]) == 0.:  # Add ion-species command if not already added
-                    for filetype in self.supported_pseudo_formats:
-                        try:
-                            shell(f'ls {self.folderpath_pseudopots} | grep {atom}.{filetype}')
-                            inputfile += f'ion-species {self.folderpath_pseudopots}/{atom}.{filetype}\n'
-                            added.append(atom)
-                            break
-                        except:
-                            pass
-        inputfile += self.pseudoSetCmd + '\n'
 
         inputfile += '\ncoulomb-interaction '
         pbc = list(atoms.get_pbc())

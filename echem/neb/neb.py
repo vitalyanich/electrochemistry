@@ -4,8 +4,10 @@ from ase.io import read
 from echem.neb.calculators import JDFTx
 from echem.io_data.jdftx import Ionpos, Lattice, Input
 from pathlib import Path
-from typing import Literal
 import os
+import logging
+logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
+                    filemode="w", format="%(asctime)s %(levelname)s %(message)s")
 
 
 class NEB_JDFTx:
@@ -17,8 +19,6 @@ class NEB_JDFTx:
                  nimages: int,
                  jdftx_input: Input,
                  path_jdftx_executable: str | Path,
-                 folderpath_pseudopots: str | Path | None = None,
-                 pseudo_set: Literal['SG15', 'GBRV', 'GBRV-pbe', 'GBRV-lda', 'GBRV-pbesol'] = 'GBRV',
                  jdftx_prefix: str = 'jdft',
                  output_name: str = 'output.out',
                  cNEB: bool = True,
@@ -35,14 +35,8 @@ class NEB_JDFTx:
         else:
             self.path_jdftx_executable = path_jdftx_executable
 
-        if isinstance(folderpath_pseudopots, str):
-            self.folderpath_pseudopots = Path(folderpath_pseudopots)
-        else:
-            self.folderpath_pseudopots = folderpath_pseudopots
-
         self.path_rundir = Path(os.getcwd())
 
-        self.pseudo_set = pseudo_set
         self.jdftx_prefix = jdftx_prefix
         self.output_name = output_name
         self.cNEB = cNEB
@@ -71,14 +65,10 @@ class NEB_JDFTx:
             if not os.path.exists(folder):
                 os.mkdir(folder)
 
-        commands = ...
-
         for i, image in enumerate(images[1:-1]):
             image.calc = JDFTx(self.path_jdftx_executable,
-                               path_rundir=self.path_rundir / i,
-                               folderpath_pseudopots=self.folderpath_pseudopots,
-                               pseudoSet=self.pseudo_set,
-                               commands=commands)
+                               path_rundir=self.path_rundir / str(i).zfill(length),
+                               commands=self.jdftx_input.commands)
 
         self.optimizer = FIRE(neb, trajectory='NEB_trajectory.traj', logfile='logfile_optimizer')
 
