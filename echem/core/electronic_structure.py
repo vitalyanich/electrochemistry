@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from typing import Union, Iterable
 from nptyping import NDArray, Shape, Number

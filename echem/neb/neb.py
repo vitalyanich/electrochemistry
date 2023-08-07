@@ -1,13 +1,14 @@
 from __future__ import annotations
 from ase.neb import NEB
 from ase.optimize import FIRE
-from ase.io import read
+from ase.io import read, write
 from echem.neb.calculators import JDFTx
 from echem.io_data.jdftx import Ionpos, Lattice, Input
 from pathlib import Path
 import os
 import logging
-from ase.autoneb import AutoNEB
+from .autoneb import AutoNEB
+
 logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
                     filemode="a", format="%(asctime)s %(levelname)s %(message)s")
 
@@ -81,20 +82,23 @@ class NEB_JDFTx:
 
 
 class AutoNEB_JDFTx:
-    def __init__(self, commands,
+    def __init__(self,
                  prefix,
-                 n_max,
                  path_jdftx_executable,
+                 n_start=3,
+                 n_max=10,
                  climb=True,
                  fmax=0.05,
                  maxsteps=100,
                  k=0.1,
                  method='eb',
-                 optimizer=FIRE,
                  space_energy_ratio=0.5,
-                 interpolation_method='idpp'):
+                 interpolation_method='idpp',
+                 smooth_curve=False):
         self.path_jdftx_executable = path_jdftx_executable
-        self.commands = commands
+        self.prefix = Path(prefix)
+        self.n_start = n_start
+        self.commands = Input.from_file(Path(prefix) / 'in').commands
         self.autoneb = AutoNEB(self.attach_calculators,
                                prefix=prefix,
                                n_simul=1,
@@ -104,17 +108,29 @@ class AutoNEB_JDFTx:
                                maxsteps=maxsteps,
                                k=k,
                                method=method,
-                               optimizer=optimizer,
                                space_energy_ratio=space_energy_ratio,
-                               world=None, parallel=True, smooth_curve=smooth_curve,
+                               world=None, parallel=False, smooth_curve=smooth_curve,
                                interpolate_method=interpolation_method)
 
+    def prepare(self):
+        initial = read(self.prefix / 'init.vasp', format='vasp')
+        final = read(self.prefix / 'final.vasp', format='vasp')
+        images = [initial]
+        images += [initial.copy() for _ in range(self.n_start)]
+        images += [final]
+        neb = NEB(images)
+        neb.interpolate(method='idpp')
+        for i, image in enumerate(images):
+            write(self.prefix / f'{i:03d}.traj', image, format='traj')
+
     def attach_calculators(self, images):
-        for i, image in enumerate(images[1:-1]):
-            path_rundir = self.autoneb.iter_folder / i
+        for i, image in enumerate(images):
+            path_rundir = self.autoneb.iter_folder / str(i)
             path_rundir.mkdir(exist_ok=True)
             image.calc = JDFTx(self.path_jdftx_executable,
                                path_rundir=path_rundir,
                                commands=self.commands)
+
     def run(self):
+        self.prepare()
         self.autoneb.run()
