@@ -1,12 +1,12 @@
 from __future__ import annotations
 import subprocess
 import tempfile
-import re
 import numpy as np
 from ase.calculators.interface import Calculator
 from echem.core.constants import Hartree2eV, Angstrom2Bohr, Bohr2Angstrom
 from pathlib import Path
 import logging
+#import os
 
 
 def shell(cmd) -> str:
@@ -46,11 +46,6 @@ class JDFTx(Calculator):
 
         self.jdftx_prefix = jdftx_prefix
         self.output_name = output_name
-
-        #self.acceptableCommands = {'electronic-SCF'}
-        #template = str(shell(f'{self.path_jdftx_executable} -t'))
-        #for match in re.findall(r"# (\S+) ", template):
-        #    self.acceptableCommands.add(match)
 
         self.dumps = []
         self.input = [('dump-name', f'{self.jdftx_prefix}.$VAR'),
@@ -97,7 +92,6 @@ class JDFTx(Calculator):
         """ Checks whether the input string is a valid jdftx command \nby comparing to the input template (jdft -t)"""
         if type(command) != str:
             raise IOError('Please enter a string as the name of the command!\n')
-        #return command in self.acceptableCommands
         return True
 
     def addCommand(self, cmd, v) -> None:
@@ -156,10 +150,6 @@ class JDFTx(Calculator):
             self.update(atoms)
         return self.E
 
-#    def get_stress(self, atoms):
-#        """Since the stress calculation is not implemented in JDFTx, function returns zero array"""
-#        return np.zeros((3, 3))
-
     def update(self, atoms):
         self.runJDFTx(self.constructInput(atoms))
 
@@ -169,10 +159,13 @@ class JDFTx(Calculator):
         file.write(inputfile)
         file.close()
 
-        shell(f'cd {self.path_rundir} && {self.path_jdftx_executable} -i input.in -o {self.output_name}')
+        #ntasks = int(os.environ['SLURM_NTASKS'])
+        logging.info(f'Current Energy: {self.E}')
+        logging.info(f'Run JDFTx in {self.path_rundir}')
+        shell(f'cd {self.path_rundir} && srun {self.path_jdftx_executable} -i input.in -o {self.output_name}')
 
-        self.E = self.__readEnergy(self.path_rundir / 'Ecomponents')
-        self.forces = self.__readForces(self.path_rundir / 'force')
+        self.E = self.__readEnergy(self.path_rundir / f'{self.jdftx_prefix}.Ecomponents')
+        self.forces = self.__readForces(self.path_rundir / f'{self.jdftx_prefix}.force')
 
     def constructInput(self, atoms) -> str:
         """Constructs a JDFTx input string using the input atoms and the input file arguments (kwargs) in self.input"""

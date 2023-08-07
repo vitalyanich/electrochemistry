@@ -73,7 +73,7 @@ class NEB_JDFTx:
                                path_rundir=self.path_rundir / str(i).zfill(length),
                                commands=self.jdftx_input.commands)
 
-        self.optimizer = FIRE(neb, trajectory='NEB_trajectory.traj', logfile='logfile_optimizer')
+        self.optimizer = FIRE(neb, trajectory='NEB_trajectory.traj', logfile='logfile_optimizer.log')
 
     def run(self):
         self.prepare()
