@@ -165,42 +165,36 @@ class Ionpos:
 
 
 class Input:
-    def __init__(self, structure):
-        self.structure = structure
+    def __init__(self, commands: list[tuple[str, str]]):
+        self.commands = commands
 
     @staticmethod
-    def from_file(filepath: str):
-        # \TODO Non-Cartesin coods case is not imptemented
+    def from_file(filepath: str | Path):
         file = open(filepath, 'r')
         data = file.readlines()
         file.close()
 
-        patterns = {'lattice': r'^\s*lattice\s+',
-                    'coords': r'^\s*ion\s+'}
-        matches = regrep(filepath, patterns)
+        commands = []
+        to_append = ''
+        for line in data:
+            line = line.strip().strip('\n')
+            if line.endswith('\\'):
+                to_append += re.sub(r'\s+', ' ', line.strip('\\'))
+            else:
+                if len(line) == 0:
+                    continue
+                to_append += line
 
-        species = []
-        coords = np.zeros((len(matches['coords']), 3))
-        for i, ion in enumerate(matches['coords']):
-            line = data[ion[1]].split()
-            species.append(line[1])
-            coords[i] = [line[2], line[3], line[4]]
+                line = to_append.split()
+                match line[0]:
+                    case 'dump':
+                        for i in line[2:]:
+                            commands.append(('dump', f'{line[1]} {i}'))
+                    case _:
+                        commands.append((line[0], ' '.join(line[1:])))
+                to_append = ''
 
-        lattice = []
-        i = 0
-        while len(lattice) < 9:
-            line = data[matches['lattice'][0][1] + i].split()
-            for word in line:
-                try:
-                    word = float(word)
-                    lattice.append(word)
-                except:
-                    pass
-            i += 1
-
-        lattice = np.array(lattice).reshape((3, 3)).T * Bohr2Angstrom
-        structure = Structure(lattice, species, coords * Bohr2Angstrom, coords_are_cartesian=True)
-        return Input(structure)
+        return Input(commands)
 
 
 class EnergyIonicHist(TypedDict):
