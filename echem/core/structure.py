@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from typing import Union, List, Sequence, Iterable
 from termcolor import colored

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from ase.neb import NEB
 from ase.optimize import FIRE
 from ase.io import read

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from typing import Union, List, Iterable
 from monty.re import regrep
