@@ -47,10 +47,10 @@ class JDFTx(Calculator):
         self.jdftx_prefix = jdftx_prefix
         self.output_name = output_name
 
-        self.acceptableCommands = {'electronic-SCF'}
-        template = str(shell(f'{self.path_jdftx_executable} -t'))
-        for match in re.findall(r"# (\S+) ", template):
-            self.acceptableCommands.add(match)
+        #self.acceptableCommands = {'electronic-SCF'}
+        #template = str(shell(f'{self.path_jdftx_executable} -t'))
+        #for match in re.findall(r"# (\S+) ", template):
+        #    self.acceptableCommands.add(match)
 
         self.dumps = []
         self.input = [('dump-name', f'{self.jdftx_prefix}.$VAR'),
@@ -59,18 +59,18 @@ class JDFTx(Calculator):
         if commands is not None:
             for com, val in commands:
                 if com == 'dump-name':
-                    logging.info(f'You set dump-name command in commands = {val}, '
+                    logging.info(f'You set \'dump-name\' command in commands = \'{val}\', '
                                  f'however it will be replaced with \'{self.jdftx_prefix}.$VAR\'')
                 elif com == 'initial-state':
-                    logging.info(f'You set initial-state command in commands = {val}, '
+                    logging.info(f'You set \'initial-state\' command in commands = \'{val}\', '
                                  f'however it will be replaced with \'{self.jdftx_prefix}.$VAR\'')
                 elif com == 'coords-type':
-                    logging.info(f'You set coords-type command in commands = {val}, '
+                    logging.info(f'You set \'coords-type\' command in commands = \'{val}\', '
                                  f'however it will be replaced with \'cartesian\'')
                 elif com == 'include':
-                    logging.info(f'include command is not supported, ignore it')
+                    logging.info(f'\'include\' command is not supported, ignore it')
                 elif com == 'coulomb-interaction':
-                    logging.info(f'coulomb-interaction command will be replaced in accordance with ase atoms')
+                    logging.info(f'\'coulomb-interaction\' command will be replaced in accordance with ase atoms')
                 elif com == 'dump':
                     self.addDump(val.split()[0], val.split()[1])
                 else:
@@ -97,7 +97,8 @@ class JDFTx(Calculator):
         """ Checks whether the input string is a valid jdftx command \nby comparing to the input template (jdft -t)"""
         if type(command) != str:
             raise IOError('Please enter a string as the name of the command!\n')
-        return command in self.acceptableCommands
+        #return command in self.acceptableCommands
+        return True
 
     def addCommand(self, cmd, v) -> None:
         if not self.validCommand(cmd):
@@ -184,7 +185,9 @@ class JDFTx(Calculator):
                 inputfile += '%f  ' % (lattice[j, i])
             if i != 2:
                 inputfile += '\\'
-            inputfile += '\n\n'
+            inputfile += '\n'
+
+        inputfile += '\n'
 
         inputfile += "".join(["dump %s %s\n" % (when, what) for when, what in self.dumps])
 
@@ -192,7 +195,7 @@ class JDFTx(Calculator):
         for cmd, v in self.input:
             inputfile += '%s %s\n' % (cmd, str(v))
 
-        coords = [x * Bohr2Angstrom for x in list(atoms.get_positions())]
+        coords = [x * Angstrom2Bohr for x in list(atoms.get_positions())]
         species = atoms.get_chemical_symbols()
         inputfile += '\ncoords-type cartesian\n'
         for i in range(len(coords)):

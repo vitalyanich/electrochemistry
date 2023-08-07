@@ -59,7 +59,7 @@ class NEB_JDFTx:
         images += [initial.copy() for _ in range(self.nimages)]
         images += [final]
 
-        neb = NEB(images,  k=self.spring_constant, climb=self.cNEB)
+        neb = NEB(images, k=self.spring_constant, climb=self.cNEB)
         neb.interpolate()
 
         length = len(str(self.nimages - 1))

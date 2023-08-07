@@ -187,12 +187,11 @@ class Input:
                 to_append += line
 
                 line = to_append.split()
-                match line[0]:
-                    case 'dump':
-                        for i in line[2:]:
-                            commands.append(('dump', f'{line[1]} {i}'))
-                    case _:
-                        commands.append((line[0], ' '.join(line[1:])))
+                if line[0] == 'dump':
+                    for i in line[2:]:
+                        commands.append(('dump', f'{line[1]} {i}'))
+                else:
+                    commands.append((line[0], ' '.join(line[1:])))
                 to_append = ''
 
         return Input(commands)
