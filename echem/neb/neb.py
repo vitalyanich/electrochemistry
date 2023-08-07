@@ -9,7 +9,7 @@ import os
 import logging
 from ase.autoneb import AutoNEB
 logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
-                    filemode="w", format="%(asctime)s %(levelname)s %(message)s")
+                    filemode="a", format="%(asctime)s %(levelname)s %(message)s")
 
 
 class NEB_JDFTx:

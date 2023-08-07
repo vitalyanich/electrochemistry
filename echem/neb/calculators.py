@@ -60,10 +60,17 @@ class JDFTx(Calculator):
             for com, val in commands:
                 if com == 'dump-name':
                     logging.info(f'You set dump-name command in commands = {val}, '
-                                 f'however it will be replaced with {self.jdftx_prefix}.$VAR')
+                                 f'however it will be replaced with \'{self.jdftx_prefix}.$VAR\'')
                 elif com == 'initial-state':
                     logging.info(f'You set initial-state command in commands = {val}, '
-                                 f'however it will be replaced with {self.jdftx_prefix}.$VAR')
+                                 f'however it will be replaced with \'{self.jdftx_prefix}.$VAR\'')
+                elif com == 'coords-type':
+                    logging.info(f'You set coords-type command in commands = {val}, '
+                                 f'however it will be replaced with \'cartesian\'')
+                elif com == 'include':
+                    logging.info(f'include command is not supported, ignore it')
+                elif com == 'coulomb-interaction':
+                    logging.info(f'coulomb-interaction command will be replaced in accordance with ase atoms')
                 elif com == 'dump':
                     self.addDump(val.split()[0], val.split()[1])
                 else:
@@ -177,7 +184,7 @@ class JDFTx(Calculator):
                 inputfile += '%f  ' % (lattice[j, i])
             if i != 2:
                 inputfile += '\\'
-            inputfile += '\n'
+            inputfile += '\n\n'
 
         inputfile += "".join(["dump %s %s\n" % (when, what) for when, what in self.dumps])
 
