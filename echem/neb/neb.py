@@ -1,14 +1,13 @@
 from __future__ import annotations
-from ase.neb import NEB
+from ase.neb import NEB, NEBOptimizer
 from ase.optimize import FIRE
 from ase.io import read, write
 from echem.neb.calculators import JDFTx
 from echem.io_data.jdftx import Ionpos, Lattice, Input
 from pathlib import Path
-import os
 import logging
-from echem.neb.autoneb import AutoNEB
-
+from ase.autoneb import AutoNEB
+from typing import Literal
 logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
                     filemode="a", format="%(asctime)s %(levelname)s %(message)s")
 
@@ -25,7 +24,8 @@ class NEB_JDFTx:
                  jdftx_prefix: str = 'jdft',
                  output_name: str = 'output.out',
                  cNEB: bool = True,
-                 spring_constant: float = 0.1):
+                 spring_constant: float = 0.1,
+                 interpolation_method: Literal['linear', 'idpp'] = 'linear'):
 
         self.init_ionpos = init_ionpos
         self.init_lattice = init_lattice
@@ -39,12 +39,13 @@ class NEB_JDFTx:
         else:
             self.path_jdftx_executable = path_jdftx_executable
 
-        self.path_rundir = Path(os.getcwd())
+        self.path_rundir = Path.cwd()
 
         self.jdftx_prefix = jdftx_prefix
         self.output_name = output_name
         self.cNEB = cNEB
         self.spring_constant = spring_constant
+        self.interpolation_method = interpolation_method
 
         self.optimizer = None
 
@@ -60,25 +61,28 @@ class NEB_JDFTx:
         images += [initial.copy() for _ in range(self.nimages)]
         images += [final]
 
-        neb = NEB(images, k=self.spring_constant, climb=self.cNEB)
-        neb.interpolate()
+        neb = NEB(images,
+                  k=self.spring_constant,
+                  climb=self.cNEB)
+        neb.interpolate(method=self.interpolation_method)
 
         length = len(str(self.nimages - 1))
         for i in range(self.nimages):
-            folder = str(i).zfill(length)
-            if not os.path.exists(folder):
-                os.mkdir(folder)
+            folder = Path(str(i).zfill(length))
+            folder.mkdir(exist_ok=True)
 
         for i, image in enumerate(images[1:-1]):
             image.calc = JDFTx(self.path_jdftx_executable,
                                path_rundir=self.path_rundir / str(i).zfill(length),
                                commands=self.jdftx_input.commands)
+        self.optimizer = NEBOptimizer(neb=neb,
+                                      method='ODE',
+                                      trajectory='NEB_trajectory.traj',
+                                      logfile='logfile_NEBOptimizer.log')
 
-        self.optimizer = FIRE(neb, trajectory='NEB_trajectory.traj', logfile='logfile_optimizer.log')
-
-    def run(self):
+    def run(self, fmax=0.05):
         self.prepare()
-        self.optimizer.run(fmax=0.04)
+        self.optimizer.run(fmax=fmax)
 
 
 class AutoNEB_JDFTx:

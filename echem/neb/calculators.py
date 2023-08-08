@@ -6,7 +6,6 @@ from ase.calculators.interface import Calculator
 from echem.core.constants import Hartree2eV, Angstrom2Bohr, Bohr2Angstrom
 from pathlib import Path
 import logging
-#import os
 
 
 def shell(cmd) -> str:
@@ -90,7 +89,7 @@ class JDFTx(Calculator):
         logging.info(f'Successfully initialized JDFTx calculator in \'{self.path_rundir}\'')
 
     def validCommand(self, command) -> bool:
-        """ Checks whether the input string is a valid jdftx command \nby comparing to the input template (jdft -t)"""
+        """Checks whether the input string is a valid jdftx command by comparing to the input template (jdft -t)"""
         if type(command) != str:
             raise IOError('Please enter a string as the name of the command!\n')
         return True
@@ -160,9 +159,8 @@ class JDFTx(Calculator):
         file.write(inputfile)
         file.close()
 
-        #ntasks = int(os.environ['SLURM_NTASKS'])
-        logging.info(f'Current Energy: {self.E}')
-        logging.info(f'Run JDFTx in {self.path_rundir}')
+        logging.info(f'{self.path_rundir} Current Energy: {self.E}')
+        logging.info(f'{self.path_rundir} Run JDFTx')
         shell(f'cd {self.path_rundir} && srun {self.path_jdftx_executable} -i input.in -o {self.output_name}')
 
         self.E = self.__readEnergy(self.path_rundir / f'{self.jdftx_prefix}.Ecomponents')
