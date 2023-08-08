@@ -123,9 +123,9 @@ class AutoNEB_JDFTx:
         for i, image in enumerate(images):
             write(self.prefix / f'{i:03d}.traj', image, format='traj')
 
-    def attach_calculators(self, images):
-        for i, image in enumerate(images):
-            path_rundir = self.autoneb.iter_folder / str(i)
+    def attach_calculators(self, images, indexes, iteration):
+        for image, index in zip(images, indexes):
+            path_rundir = self.autoneb.iter_folder / f'iter_{iteration}' / str(index)
             path_rundir.mkdir(exist_ok=True)
             image.calc = JDFTx(self.path_jdftx_executable,
                                path_rundir=path_rundir,
