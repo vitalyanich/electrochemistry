@@ -6,7 +6,7 @@ from echem.neb.calculators import JDFTx
 from echem.io_data.jdftx import Ionpos, Lattice, Input
 from pathlib import Path
 import logging
-from ase.autoneb import AutoNEB
+from echem.neb.autoneb import AutoNEB
 from typing import Literal
 logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
                     filemode="a", format="%(asctime)s %(levelname)s %(message)s")
@@ -120,6 +120,8 @@ class AutoNEB_JDFTx:
         'aseneb', standard ase NEB implementation
         'improvedtangent', published NEB implementation
         'eb', full spring force implementation (default)
+    optimizer: str or object
+        Set optimizer for NEB: FIRE, BFGS or NEB
     space_energy_ratio: float
         The preference for new images to be added in a big energy gab
         with a preference around the peak or in the biggest geometric gab.
@@ -141,6 +143,7 @@ class AutoNEB_JDFTx:
                  maxsteps=100,
                  k=0.1,
                  method='eb',
+                 optimizer='FIRE',
                  space_energy_ratio=0.5,
                  interpolation_method='idpp',
                  smooth_curve=False):
@@ -160,7 +163,7 @@ class AutoNEB_JDFTx:
                                method=method,
                                space_energy_ratio=space_energy_ratio,
                                world=None, parallel=False, smooth_curve=smooth_curve,
-                               interpolate_method=interpolation_method)
+                               interpolate_method=interpolation_method, optimizer=optimizer)
 
     def prepare(self):
         initial = read(self.prefix / 'init.vasp', format='vasp')

@@ -19,6 +19,7 @@ from ase.io import read
 from ase.neb import NEB
 from ase.optimize import BFGS
 from ase.optimize import FIRE
+from ase.neb import NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
 import ase.parallel as mpi
 
@@ -103,7 +104,7 @@ class AutoNEB:
     def __init__(self, attach_calculators, prefix, n_simul, n_max,
                  iter_folder='iterations',
                  fmax=0.025, maxsteps=10000, k=0.1, climb=True, method='eb',
-                 optimizer=FIRE,
+                 optimizer='FIRE',
                  remove_rotation_and_translation=False, space_energy_ratio=0.5,
                  world=None,
                  parallel=True, smooth_curve=False, interpolate_method='idpp'):
@@ -133,13 +134,11 @@ class AutoNEB:
         self.smooth_curve = smooth_curve
 
         if isinstance(optimizer, str):
-            warn('Please set optimizer as an object and not as string',
-                 FutureWarning)
             try:
                 self.optimizer = {
-                    'BFGS': BFGS, 'FIRE': FIRE}[optimizer]
+                    'BFGS': BFGS, 'FIRE': FIRE, 'NEB': NEBOptimizer}[optimizer]
             except KeyError:
-                raise Exception('Optimizer needs to be BFGS or FIRE')
+                raise Exception('Optimizer needs to be BFGS, FIRE or NEB')
         else:
             self.optimizer = optimizer
 
