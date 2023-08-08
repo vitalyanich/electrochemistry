@@ -137,6 +137,7 @@ class AutoNEB_JDFTx:
                  prefix,
                  path_jdftx_executable,
                  n_start=3,
+                 n_simul=3,
                  n_max=10,
                  climb=True,
                  fmax=0.05,
@@ -154,7 +155,7 @@ class AutoNEB_JDFTx:
         self.interpolation_method = interpolation_method
         self.autoneb = AutoNEB(self.attach_calculators,
                                prefix=prefix,
-                               n_simul=1,
+                               n_simul=n_simul,
                                n_max=n_max,
                                climb=climb,
                                fmax=fmax,
