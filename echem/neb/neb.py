@@ -82,6 +82,51 @@ class NEB_JDFTx:
 
 
 class AutoNEB_JDFTx:
+    """
+    Class for running AutoNEB with JDFTx calculator
+
+    Parameters:
+
+    prefix: string or Path
+        path to folder with initial files. Basically could be os.getcwd()
+        In this folder required:
+            1) init.vasp file with initial configuration
+            2) final.vasp file with final configuration
+            3) in file with JDFTx calculation parameters
+    path_jdftx_executable: string or Path
+        path to jdftx executable
+    n_start: int
+        Starting number of images between starting and final for NEB
+    n_max: int
+        Maximum number of images, including starting and final
+    climb: boolean
+        Whether it is necessary to use cNEB or not
+    fmax: float or list of floats
+        The maximum force along the NEB path
+    maxsteps: int
+        The maximum number of steps in each NEB relaxation.
+        If a list is given the first number of steps is used in the build-up
+        and final scan phase;
+        the second number of steps is used in the CI step after all images
+        have been inserted.
+    k: float
+        The spring constant along the NEB path
+    method: str (see neb.py)
+        Choice betweeen three method:
+        'aseneb', standard ase NEB implementation
+        'improvedtangent', published NEB implementation
+        'eb', full spring force implementation (default)
+    space_energy_ratio: float
+        The preference for new images to be added in a big energy gab
+        with a preference around the peak or in the biggest geometric gab.
+        A space_energy_ratio set to 1 will only considder geometric gabs
+        while one set to 0 will result in only images for energy
+        resolution.
+    interpolation_method: string
+        method for interpolation
+    smooth_curve: boolean
+    """
+
     def __init__(self,
                  prefix,
                  path_jdftx_executable,
@@ -99,6 +144,7 @@ class AutoNEB_JDFTx:
         self.prefix = Path(prefix)
         self.n_start = n_start
         self.commands = Input.from_file(Path(prefix) / 'in').commands
+        self.interpolation_method = interpolation_method
         self.autoneb = AutoNEB(self.attach_calculators,
                                prefix=prefix,
                                n_simul=1,
@@ -119,7 +165,7 @@ class AutoNEB_JDFTx:
         images += [initial.copy() for _ in range(self.n_start)]
         images += [final]
         neb = NEB(images)
-        neb.interpolate(method='idpp')
+        neb.interpolate(method=self.interpolation_method)
         for i, image in enumerate(images):
             write(self.prefix / f'{i:03d}.traj', image, format='traj')
 
