@@ -7,7 +7,7 @@ from echem.io_data.jdftx import Ionpos, Lattice, Input
 from pathlib import Path
 import os
 import logging
-from .autoneb import AutoNEB
+from echem.neb.autoneb import AutoNEB
 
 logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
                     filemode="a", format="%(asctime)s %(levelname)s %(message)s")
