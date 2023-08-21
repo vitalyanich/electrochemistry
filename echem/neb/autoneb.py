@@ -23,6 +23,8 @@ from ase.neb import NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
 import ase.parallel as mpi
 
+import functools
+print = functools.partial(print, flush=True)
 
 class AutoNEB:
     """AutoNEB object.

@@ -143,11 +143,13 @@ class AutoNEB_JDFTx:
                  fmax=0.05,
                  maxsteps=100,
                  k=0.1,
+                 restart=False,
                  method='eb',
                  optimizer='FIRE',
                  space_energy_ratio=0.5,
                  interpolation_method='idpp',
                  smooth_curve=False):
+        self.restart = restart
         self.path_jdftx_executable = path_jdftx_executable
         self.prefix = Path(prefix)
         self.n_start = n_start
@@ -170,10 +172,12 @@ class AutoNEB_JDFTx:
         initial = read(self.prefix / 'init.vasp', format='vasp')
         final = read(self.prefix / 'final.vasp', format='vasp')
         images = [initial]
-        images += [initial.copy() for _ in range(self.n_start)]
+        if self.n_start != 0:
+            images += [initial.copy() for _ in range(self.n_start)]
         images += [final]
-        neb = NEB(images)
-        neb.interpolate(method=self.interpolation_method)
+        if self.n_start != 0:
+            neb = NEB(images)
+            neb.interpolate(method=self.interpolation_method)
         for i, image in enumerate(images):
             write(self.prefix / f'{i:03d}.traj', image, format='traj')
 
@@ -186,5 +190,6 @@ class AutoNEB_JDFTx:
                                commands=self.commands)
 
     def run(self):
-        self.prepare()
+        if not self.restart:
+            self.prepare()
         self.autoneb.run()
