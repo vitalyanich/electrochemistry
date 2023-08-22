@@ -112,7 +112,7 @@ class Poscar:
             file.write(f'  {vector[0]}  {vector[1]}  {vector[2]}\n')
 
         species = np.array(self.structure.species)
-        sorted_order = np.argsort(species)
+        sorted_order = np.argsort(species, kind='stable')
         unique, counts = np.unique(species, return_counts=True)
         line = '   '
         for u in unique:
@@ -641,7 +641,7 @@ class Xdatcar:
             file.write(f'  {vector[0]}  {vector[1]}  {vector[2]}\n')
 
         species = np.array(self.structure.species)
-        sorted_order = np.argsort(species)
+        sorted_order = np.argsort(species, kind='stable')
         sorted_trajectory = self.trajectory[:, sorted_order, :]
         unique, counts = np.unique(species, return_counts=True)
         line = '   '
