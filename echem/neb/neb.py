@@ -6,6 +6,8 @@ from echem.neb.calculators import JDFTx
 from echem.io_data.jdftx import Ionpos, Lattice, Input
 from pathlib import Path
 import logging
+import os
+from ase.io.trajectory import Trajectory
 from echem.neb.autoneb import AutoNEB
 from typing import Literal
 logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
@@ -153,6 +155,7 @@ class AutoNEB_JDFTx:
         self.path_jdftx_executable = path_jdftx_executable
         self.prefix = Path(prefix)
         self.n_start = n_start
+        self.n_max = n_max
         self.commands = Input.from_file(Path(prefix) / 'in').commands
         self.interpolation_method = interpolation_method
         self.autoneb = AutoNEB(self.attach_calculators,
@@ -169,17 +172,27 @@ class AutoNEB_JDFTx:
                                interpolate_method=interpolation_method, optimizer=optimizer)
 
     def prepare(self):
-        initial = read(self.prefix / 'init.vasp', format='vasp')
-        final = read(self.prefix / 'final.vasp', format='vasp')
-        images = [initial]
-        if self.n_start != 0:
-            images += [initial.copy() for _ in range(self.n_start)]
-        images += [final]
-        if self.n_start != 0:
-            neb = NEB(images)
-            neb.interpolate(method=self.interpolation_method)
-        for i, image in enumerate(images):
-            write(self.prefix / f'{i:03d}.traj', image, format='traj')
+        if not self.restart:
+            initial = read(self.prefix / 'init.vasp', format='vasp')
+            final = read(self.prefix / 'final.vasp', format='vasp')
+            images = [initial]
+            if self.n_start != 0:
+                images += [initial.copy() for _ in range(self.n_start)]
+            images += [final]
+            if self.n_start != 0:
+                neb = NEB(images)
+                neb.interpolate(method=self.interpolation_method)
+            for i, image in enumerate(images):
+                image.write(self.prefix / f'{i:03d}.traj', format='traj')
+                image.write(self.prefix / f'{i:03d}.vasp', format='vasp')
+        else:
+            index_exists = [i for i in range(self.n_max) if
+                            os.path.isfile(self.prefix / f'{i:03d}.traj')]
+            for i in index_exists:
+                image = Trajectory(self.prefix / f'{i:03d}.traj')
+                image[-1].write(self.prefix / f'{i:03d}.vasp', format='vasp')
+                img = read(self.prefix / f'{i:03d}.vasp', format='vasp')
+                img.write(self.prefix / f'{i:03d}.traj', format='traj')
 
     def attach_calculators(self, images, indexes, iteration):
         for image, index in zip(images, indexes):
@@ -190,6 +203,5 @@ class AutoNEB_JDFTx:
                                commands=self.commands)
 
     def run(self):
-        if not self.restart:
-            self.prepare()
+        self.prepare()
         self.autoneb.run()
