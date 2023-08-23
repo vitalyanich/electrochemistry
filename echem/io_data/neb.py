@@ -27,12 +27,17 @@ def get_energies_from_logs(folderpath, plot=False, dpi=200):
         max_i = 0
         for i in range(len(energies)):
             plt.figure(dpi=dpi)
+            barrier = []
+            all_images = []
             for image in energies[i].keys():
                 if int(image) > max_i:
                     max_i = int(image)
                 plt.scatter([int(image) for _ in range(len(energies[i][image]))], energies[i][image], c=f'C{int(image)}')
                 if len(energies[i][image]) != 0:
                     plt.scatter(int(image), energies[i][image][-1], c=f'C{int(image)}')
+                    barrier.append(energies[i][image][-1])
+                    all_images.append(int(image))
+                plt.plot(all_images, barrier, c='black')
         return plt, energies
     else:
         return energies
