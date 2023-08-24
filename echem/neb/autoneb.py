@@ -369,6 +369,15 @@ class AutoNEB:
                 print('Adding image between {0} and'.format(jmax),
                       '{0}. New image point is selected'.format(jmax + 1),
                       'on the basis of the biggest ' + t)
+                for i in range(n_cur):
+                    if i <= jmax:
+                        folder_from = self.iter_folder / f'iter_{self.iteration}' / f'{i}'
+                        folder_to = self.iter_folder / f'iter_{self.iteration + 1}' / f'{i}'
+                    else:
+                        folder_from = self.iter_folder / f'iter_{self.iteration}' / f'{i}'
+                        folder_to = self.iter_folder / f'iter_{self.iteration + 1}' / f'{i + 1}'
+                    (self.iter_folder / f'iter_{self.iteration + 1}').mkdir(exist_ok=True)
+                    shutil.copytree(folder_from, folder_to, dirs_exist_ok=True)
 
             toInterpolate = [self.all_images[jmax]]
             toInterpolate += [toInterpolate[0].copy()]
@@ -404,9 +413,19 @@ class AutoNEB:
                 self.k = [self.k] * (len(self.all_images) - 1)
             if self.world.rank == 0:
                 print('****Now doing the CI-NEB calculation****')
-            to_run, climb_safe = self.which_images_to_run_on()
 
-            assert climb_safe, 'climb_safe should be true at this point!'
+                for i in range(n_cur):
+                    folder_from = self.iter_folder / f'iter_{self.iteration}' / f'{i}'
+                    folder_to = self.iter_folder / f'iter_{self.iteration + 1}' / f'{i}'
+                    (self.iter_folder / f'iter_{self.iteration + 1}').mkdir(exist_ok=True)
+                    shutil.copytree(folder_from, folder_to, dirs_exist_ok=True)
+
+            highest_energy_index = self.get_highest_energy_index()
+            nneb = highest_energy_index - 1 - self.n_simul // 2
+            nneb = max(nneb, 0)
+            nneb = min(nneb, n_cur - self.n_simul - 2)
+            to_run = list(range(nneb, nneb + self.n_simul + 2))
+
             self.execute_one_neb(n_cur, to_run, climb=True, many_steps=True)
 
         if not self.smooth_curve:
@@ -448,6 +467,14 @@ class AutoNEB:
         # Roll back to start from the top-point
         if self.world.rank == 0:
             print('Now moving from top to start')
+
+            for i in range(n_cur):
+                folder_from = self.iter_folder / f'iter_{self.iteration}' / f'{i}'
+                folder_to = self.iter_folder / f'iter_{self.iteration + 1}' / f'{i}'
+                (self.iter_folder / f'iter_{self.iteration + 1}').mkdir(exist_ok=True)
+                shutil.copytree(folder_from, folder_to, dirs_exist_ok=True)
+
+
         highest_energy_index = self.get_highest_energy_index()
         nneb = highest_energy_index - self.n_simul - 1
         while nneb >= 0:
@@ -561,7 +588,7 @@ class AutoNEB:
 
         # If all images missing the energy
         if last_missing - first_missing + 1 == n_cur - 2:
-            return list(range(0, n_cur)), True
+            return list(range(0, n_cur)), False
 
         # Other options
         else:
