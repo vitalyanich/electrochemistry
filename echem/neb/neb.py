@@ -16,25 +16,19 @@ logging.basicConfig(level=logging.INFO, filename="logfile_NEB.log",
 
 class NEB_JDFTx:
     def __init__(self,
-                 init_ionpos: Ionpos,
-                 init_lattice: Lattice,
-                 final_ionpos: Ionpos,
-                 final_lattice: Lattice,
-                 nimages: int,
-                 jdftx_input: Input,
                  path_jdftx_executable: str | Path,
-                 jdftx_prefix: str = 'jdft',
+                 nimages: int = 5,
                  output_name: str = 'output.out',
                  cNEB: bool = True,
-                 spring_constant: float = 0.1,
-                 interpolation_method: Literal['linear', 'idpp'] = 'linear'):
+                 restart: bool = False,
+                 spring_constant: float = 5.0,
+                 input_format: Literal['vasp', 'jdftx'] = 'jdftx',
+                 fmax: float = 0.05,
+                 method: str = 'ODE',
+                 inp_filename: str = 'in',
+                 interpolation_method: Literal['linear', 'idpp'] = 'idpp'):
 
-        self.init_ionpos = init_ionpos
-        self.init_lattice = init_lattice
-        self.final_ionpos = final_ionpos
-        self.final_lattice = final_lattice
         self.nimages = nimages
-        self.jdftx_input = jdftx_input
 
         if isinstance(path_jdftx_executable, str):
             self.path_jdftx_executable = Path(path_jdftx_executable)
@@ -42,49 +36,72 @@ class NEB_JDFTx:
             self.path_jdftx_executable = path_jdftx_executable
 
         self.path_rundir = Path.cwd()
-
-        self.jdftx_prefix = jdftx_prefix
+        self.jdftx_input = Input.from_file(inp_filename)
         self.output_name = output_name
         self.cNEB = cNEB
+        self.fmax = fmax
+        self.restart = restart
+        self.method = method
         self.spring_constant = spring_constant
         self.interpolation_method = interpolation_method
-
+        self.input_format = input_format
         self.optimizer = None
 
     def prepare(self):
-        init_poscar = self.init_ionpos.convert('vasp', self.init_lattice)
-        init_poscar.to_file('POSCAR_init.vasp')
-        initial = read('POSCAR_init.vasp', format='vasp')
-        final_poscar = self.final_ionpos.convert('vasp', self.final_lattice)
-        final_poscar.to_file('POSCAR_final.vasp')
-        final = read('POSCAR_final.vasp', format='vasp')
+        if not self.restart:
+            if self.input_format == 'jdftx':
+                init_ionpos = Ionpos.from_file('init.ionpos')
+                init_lattice = Lattice.from_file('init.lattice')
+                final_ionpos = Ionpos.from_file('final.ionpos')
+                final_lattice = Lattice.from_file('final.lattice')
+                init_poscar = init_ionpos.convert('vasp', init_lattice)
+                init_poscar.to_file('init.vasp')
+                final_poscar = final_ionpos.convert('vasp', final_lattice)
+                final_poscar.to_file('final.vasp')
 
-        images = [initial]
-        images += [initial.copy() for _ in range(self.nimages)]
-        images += [final]
+            initial = read('init.vasp', format='vasp')
+            final = read('final.vasp', format='vasp')
 
-        neb = NEB(images,
-                  k=self.spring_constant,
-                  climb=self.cNEB)
-        neb.interpolate(method=self.interpolation_method)
+            images = [initial]
+            images += [initial.copy() for _ in range(self.nimages)]
+            images += [final]
+
+            neb = NEB(images,
+                      k=self.spring_constant,
+                      climb=self.cNEB)
+            neb.interpolate(method=self.interpolation_method)
+            for i, image in enumerate(images):
+                image.write(f'start_img{i:02d}.vasp', format='vasp')
+        else:
+            trj = Trajectory('NEB_trajectory.traj')
+            n_iter = int(len(trj) / (self.nimages + 2))
+            images = []
+            for i in range(self.nimages + 2):
+                trj[(n_iter - 1) * self.nimages + i].write(f'start_img{i:02d}.vasp', format='vasp')
+                img = read(f'start_img{i:02d}.vasp', format='vasp')
+                images.append(img)
+
+            neb = NEB(images,
+                      k=self.spring_constant,
+                      climb=self.cNEB)
 
         length = len(str(self.nimages - 1))
         for i in range(self.nimages):
-            folder = Path(str(i).zfill(length))
+            folder = Path(str(i+1).zfill(length))
             folder.mkdir(exist_ok=True)
 
         for i, image in enumerate(images[1:-1]):
             image.calc = JDFTx(self.path_jdftx_executable,
-                               path_rundir=self.path_rundir / str(i).zfill(length),
+                               path_rundir=self.path_rundir / str(i+1).zfill(length),
                                commands=self.jdftx_input.commands)
         self.optimizer = NEBOptimizer(neb=neb,
-                                      method='ODE',
+                                      method=self.method,
                                       trajectory='NEB_trajectory.traj',
                                       logfile='logfile_NEBOptimizer.log')
 
-    def run(self, fmax=0.05):
+    def run(self):
         self.prepare()
-        self.optimizer.run(fmax=fmax)
+        self.optimizer.run(fmax=self.fmax)
 
 
 class AutoNEB_JDFTx:

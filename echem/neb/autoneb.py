@@ -491,7 +491,11 @@ class AutoNEB:
             self.execute_one_neb(n_cur, range(nneb, nneb + self.n_simul + 2),
                                  climb=False)
             nneb += 1
+        energies = self.get_energies()
+        print(f'Energies after iteration {self.iteration}: {energies}')
         return self.all_images
+
+
 
     def __initialize__(self):
         '''Load files from the filesystem.'''

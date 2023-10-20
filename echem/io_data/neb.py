@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from echem.io_data.jdftx import Output
 from echem.core.constants import Hartree2eV
+import numpy as np
 
 def get_energies_from_logs(folderpath, plot=False, dpi=200):
     patterns = {'en': r'(\d+).(\d+)\s+Current Energy:\s+(.\d+\.\d+)', 'iter': r'Now starting iteration (\d+) on\s+\[(.+)\]'}
@@ -91,3 +92,26 @@ def get_energies_from_pylog(filepath, plot=False, dpi=200):
         return plt, energies
     else:
         return energies
+
+def get_energies_from_NEBlog(folderpath, plot=False, dpi=200):
+    patterns = {'en': r'(\d+)\s+Current Energy:\s+(.\d+\.\d+)', \
+                'images': r'Successfully initialized JDFTx calculator(.+)/(\d+)'}
+    NEBlogpath = Path(folderpath) / 'logfile_NEB.log'
+    matches_neb = regrep(str(NEBlogpath), patterns)
+    nimages = len(matches_neb['images'])
+    energies = [[] for i in range(nimages)]
+    for i in range(len(matches_neb['en'])):
+        image = int(matches_neb['en'][i][0][0])
+        energies[image].append(float(matches_neb['en'][i][0][1]))
+    if plot:
+        plt.figure(dpi=dpi)
+        barrier = []
+        all_images = []
+        for image in range(len(energies)):
+            plt.scatter([image for _ in range(len(energies[image]))], energies[image], c=f'C{image}')
+            barrier.append(energies[image][-1])
+            all_images.append(int(image))
+            plt.plot(all_images, barrier, c='black')
+        return plt, np.array(energies)
+    else:
+        return np.array(energies)
