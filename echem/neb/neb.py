@@ -21,6 +21,7 @@ class NEB_JDFTx:
                  output_name: str = 'output.out',
                  cNEB: bool = True,
                  restart: bool = False,
+                 from_vasp: bool = False,
                  spring_constant: float = 5.0,
                  input_format: Literal['vasp', 'jdftx'] = 'jdftx',
                  fmax: float = 0.05,
@@ -40,6 +41,7 @@ class NEB_JDFTx:
         self.output_name = output_name
         self.cNEB = cNEB
         self.fmax = fmax
+        self.from_vasp = from_vasp
         self.restart = restart
         self.method = method
         self.spring_constant = spring_constant
@@ -73,13 +75,14 @@ class NEB_JDFTx:
             for i, image in enumerate(images):
                 image.write(f'start_img{i:02d}.vasp', format='vasp')
         else:
-            trj = Trajectory('NEB_trajectory.traj')
-            n_iter = int(len(trj) / (self.nimages + 2))
-            images = []
-            for i in range(self.nimages + 2):
-                trj[(n_iter - 1) * self.nimages + i].write(f'start_img{i:02d}.vasp', format='vasp')
-                img = read(f'start_img{i:02d}.vasp', format='vasp')
-                images.append(img)
+            if not self.from_vasp:
+                trj = Trajectory('NEB_trajectory.traj')
+                n_iter = int(len(trj) / (self.nimages + 2))
+                images = []
+                for i in range(self.nimages + 2):
+                    trj[(n_iter - 1) * self.nimages + i].write(f'start_img{i:02d}.vasp', format='vasp')
+            img = read(f'start_img{i:02d}.vasp', format='vasp')
+            images.append(img)
 
             neb = NEB(images,
                       k=self.spring_constant,
