@@ -75,14 +75,16 @@ class NEB_JDFTx:
             for i, image in enumerate(images):
                 image.write(f'start_img{i:02d}.vasp', format='vasp')
         else:
+            images = []
             if not self.from_vasp:
                 trj = Trajectory('NEB_trajectory.traj')
                 n_iter = int(len(trj) / (self.nimages + 2))
-                images = []
                 for i in range(self.nimages + 2):
                     trj[(n_iter - 1) * (self.nimages + 2) + i].write(f'start_img{i:02d}.vasp', format='vasp')
-            img = read(f'start_img{i:02d}.vasp', format='vasp')
-            images.append(img)
+
+            for i in range(self.nimages + 2):
+                img = read(f'start_img{i:02d}.vasp', format='vasp')
+                images.append(img)
 
             neb = NEB(images,
                       k=self.spring_constant,
