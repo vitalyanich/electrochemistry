@@ -80,7 +80,7 @@ class NEB_JDFTx:
                 n_iter = int(len(trj) / (self.nimages + 2))
                 images = []
                 for i in range(self.nimages + 2):
-                    trj[(n_iter - 1) * self.nimages + i].write(f'start_img{i:02d}.vasp', format='vasp')
+                    trj[(n_iter - 1) * (self.nimages + 2) + i].write(f'start_img{i:02d}.vasp', format='vasp')
             img = read(f'start_img{i:02d}.vasp', format='vasp')
             images.append(img)
 

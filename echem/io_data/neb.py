@@ -102,7 +102,7 @@ def get_energies_from_NEBlog(folderpath, plot=False, dpi=200):
     energies = [[] for i in range(nimages)]
     for i in range(len(matches_neb['en'])):
         image = int(matches_neb['en'][i][0][0])
-        energies[image].append(float(matches_neb['en'][i][0][1]))
+        energies[image-1].append(float(matches_neb['en'][i][0][1]))
     if plot:
         plt.figure(dpi=dpi)
         barrier = []
