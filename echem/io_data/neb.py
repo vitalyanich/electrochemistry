@@ -112,6 +112,6 @@ def get_energies_from_NEBlog(folderpath, plot=False, dpi=200):
             barrier.append(energies[image][-1])
             all_images.append(int(image))
             plt.plot(all_images, barrier, c='black')
-        return plt, np.array(energies)
+        return plt, energies
     else:
-        return np.array(energies)
+        return energies
