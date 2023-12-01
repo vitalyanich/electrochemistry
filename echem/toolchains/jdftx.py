@@ -168,10 +168,10 @@ class InfoExtractor:
                                   color='red', attrs=['bold']),
                           colored('has output and phonon output for different systems'))
 
-    def get_info_multiple(self,
-                          path_root_folder: str | Path,
-                          recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
-                          num_workers: int = 1) -> None:
+    def extract_info_multiple(self,
+                              path_root_folder: str | Path,
+                              recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
+                              num_workers: int = 1) -> None:
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
 
@@ -181,12 +181,12 @@ class InfoExtractor:
 
         with tqdm(total=len(subfolders)) as pbar:
             with ThreadPoolExecutor(num_workers) as executor:
-                for _ in executor.map(self.get_info, subfolders, [recreate_files] * len(subfolders)):
+                for _ in executor.map(self.extract_info, subfolders, [recreate_files] * len(subfolders)):
                     pbar.update()
 
-    def get_info(self,
-                 path_root_folder: str | Path,
-                 recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None) -> None:
+    def extract_info(self,
+                     path_root_folder: str | Path,
+                     recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None) -> None:
 
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
@@ -567,7 +567,7 @@ class InfoExtractor:
     def get_Gibbs_vib(self, substrate: str, adsorbate: str, idx: int, T: float) -> float:
         return self.get_system(substrate, adsorbate, idx)[0]['output_phonons'].thermal_props.get_Gibbs_vib(T)
 
-    def plot_energy(self, substrate: str, adsorbate: str):
+    def plot_convergence(self, substrate: str, adsorbate: str):
 
         systems = self.get_system(substrate, adsorbate)
         energy_min = min(system['output'].energy for system in systems)
