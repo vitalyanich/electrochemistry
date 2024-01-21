@@ -1,7 +1,6 @@
 from __future__ import annotations
 from ase.neb import NEB, NEBOptimizer
-from ase.optimize import FIRE
-from ase.io import read, write
+from ase.io import read
 from echem.neb.calculators import JDFTx
 from echem.io_data.jdftx import Ionpos, Lattice, Input
 from pathlib import Path
@@ -18,39 +17,39 @@ class NEB_JDFTx:
     def __init__(self,
                  path_jdftx_executable: str | Path,
                  nimages: int = 5,
+                 input_filepath: str | Path = 'input.in',
                  output_name: str = 'output.out',
+                 input_format: Literal['jdftx', 'vasp'] = 'jdftx',
                  cNEB: bool = True,
-                 restart: bool = False,
-                 from_vasp: bool = False,
                  spring_constant: float = 5.0,
-                 input_format: Literal['vasp', 'jdftx'] = 'jdftx',
                  fmax: float = 0.05,
-                 method: str = 'ODE',
-                 inp_filename: str = 'in',
-                 interpolation_method: Literal['linear', 'idpp'] = 'idpp'):
-
-        self.nimages = nimages
+                 method: Literal['ODE', 'static'] = 'ODE',
+                 interpolation_method: Literal['linear', 'idpp'] = 'idpp',
+                 restart: Literal[False, 'from_traj', 'from_vasp'] = False):
 
         if isinstance(path_jdftx_executable, str):
             self.path_jdftx_executable = Path(path_jdftx_executable)
         else:
             self.path_jdftx_executable = path_jdftx_executable
 
+        if isinstance(input_filepath, str):
+            input_filepath = Path(input_filepath)
+        self.jdftx_input = Input.from_file(input_filepath)
+
+        self.nimages = nimages
         self.path_rundir = Path.cwd()
-        self.jdftx_input = Input.from_file(inp_filename)
         self.output_name = output_name
+        self.input_format = input_format
         self.cNEB = cNEB
         self.fmax = fmax
-        self.from_vasp = from_vasp
         self.restart = restart
         self.method = method
         self.spring_constant = spring_constant
         self.interpolation_method = interpolation_method
-        self.input_format = input_format
         self.optimizer = None
 
     def prepare(self):
-        if not self.restart:
+        if self.restart is False:
             if self.input_format == 'jdftx':
                 init_ionpos = Ionpos.from_file('init.ionpos')
                 init_lattice = Lattice.from_file('init.lattice')
@@ -76,21 +75,25 @@ class NEB_JDFTx:
                 image.write(f'start_img{i:02d}.vasp', format='vasp')
         else:
             images = []
-            if not self.from_vasp:
+            if self.restart == 'from_traj':
                 trj = Trajectory('NEB_trajectory.traj')
                 n_iter = int(len(trj) / (self.nimages + 2))
                 for i in range(self.nimages + 2):
                     trj[(n_iter - 1) * (self.nimages + 2) + i].write(f'start_img{i:02d}.vasp', format='vasp')
 
-            for i in range(self.nimages + 2):
-                img = read(f'start_img{i:02d}.vasp', format='vasp')
-                images.append(img)
+            elif self.restart == 'from_vasp':
+                for i in range(self.nimages + 2):
+                    img = read(f'start_img{i:02d}.vasp', format='vasp')
+                    images.append(img)
+
+            else:
+                raise ValueError(f'restart must be False or \'from_traj\', or \'from_vasp\' but you set {self.restart=}')
 
             neb = NEB(images,
                       k=self.spring_constant,
                       climb=self.cNEB)
 
-        length = len(str(self.nimages - 1))
+        length = len(str(self.nimages + 1))
         for i in range(self.nimages):
             folder = Path(str(i+1).zfill(length))
             folder.mkdir(exist_ok=True)
