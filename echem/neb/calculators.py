@@ -159,7 +159,7 @@ class JDFTx(Calculator):
         file.write(inputfile)
         file.close()
 
-        logging.info(f'{self.path_rundir} Current Energy: {self.E}')
+        logging.info(f'{self.path_rundir} Energy from the previous step: {self.E}')
         logging.info(f'{self.path_rundir} Run JDFTx')
         shell(f'cd {self.path_rundir} && srun {self.path_jdftx_executable} -i input.in -o {self.output_name}')
 
