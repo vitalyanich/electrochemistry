@@ -32,3 +32,8 @@ Bader_radii_Bohr = {'H': 2.88, 'He': 2.5, 'Li': 4.18, 'Be': 4.17, 'B': 3.91, 'C'
 
 IDSCRF_radii_Angstrom = {'H': 1.77, 'He': 1.49, 'Li': 2.22, 'Be': 2.19, 'B': 2.38, 'C': 2.22, 'N': 2.05, 'O': 1.87,
                          'F': 1.89, 'Ne': 1.74}
+
+# Colorblindness-friendly colors from https://github.com/mpetroff/accessible-color-cycles
+cbf6 = ["#5790fc", "#f89c20", "#e42536", "#964a8b", "#9c9ca1", "#7a21dd"]
+cbf8 = ["#1845fb", "#ff5e02", "#c91f16", "#c849a9", "#adad7d", "#86c8dd", "#578dff", "#656364"]
+cbf10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6", "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
