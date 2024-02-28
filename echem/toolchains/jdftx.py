@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pathlib import Path
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
@@ -219,8 +220,7 @@ class InfoExtractor:
         if is_vib_folder:
             output_phonons = Output.from_file(path_root_folder / self.output_name)
             if (output_phonons.phonons['zero'] is not None and any(output_phonons.phonons['zero'] > 1e-5)) or \
-                    (output_phonons.phonons['imag'] is not None and any(
-                        np.abs(output_phonons.phonons['imag']) > 1e-5)):
+                    (output_phonons.phonons['imag'] is not None and any(np.abs(output_phonons.phonons['imag']) > 1e-5)):
                 print(colored(str(path_root_folder), color='yellow', attrs=['bold']))
 
                 if output_phonons.phonons['zero'] is not None:
