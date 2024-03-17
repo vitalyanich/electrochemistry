@@ -209,7 +209,7 @@ class Output(IonicDynamics):
                  energy_ionic_hist: EnergyIonicHist,
                  coords_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number],
                  forces_hist: NDArray[Shape['Nsteps, Natoms, 3'], Number] | None,
-                 nelec_hist: np.ndarray,
+                 nelec_hist: NDArray[Shape['Nsteps'], Number],
                  magnetization_hist: NDArray[Shape['Nesteps, 2'], Number] | None,
                  structure: Structure,
                  nbands: int,
@@ -220,7 +220,7 @@ class Output(IonicDynamics):
                  phonons: dict[Literal['real', 'imag', 'zero', 'nStates'], np.ndarray | None],
                  pseudopots: dict,
                  lowding: dict[str, float] | None):
-        super(Output, self).__init__(forces_hist)
+        super(Output, self).__init__(forces_hist, coords_hist, structure.lattice, True)
         self.fft_box_size = fft_box_size
         self.energy_ionic_hist = energy_ionic_hist
         self.coords_hist = coords_hist

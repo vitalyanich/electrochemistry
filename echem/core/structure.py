@@ -1,7 +1,8 @@
 from __future__ import annotations
 import numpy as np
-from typing import Union, List, Sequence, Iterable
+from typing import Iterable
 from termcolor import colored
+from nptyping import NDArray, Shape, Number
 
 
 class Structure:
@@ -15,9 +16,9 @@ class Structure:
         coords_are_cartesian: True if coords are cartesian, False if coords are fractional
     """
     def __init__(self,
-                 lattice: Union[List, np.ndarray],
-                 species: Union[List[str], np.ndarray],
-                 coords: Union[Sequence[Sequence[float]], np.ndarray],
+                 lattice: NDArray[Shape[3, 3], Number] | list[list[float]],
+                 species: list[str],
+                 coords: NDArray[Shape['Natoms, 3'], Number] | list[list[float]],
                  coords_are_cartesian: bool = True):
 
         if len(species) != len(coords):
@@ -37,7 +38,7 @@ class Structure:
 
         self.coords_are_cartesian = coords_are_cartesian
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         lines = ['\nLattice:']
 
         width = len(str(int(np.max(self.lattice)))) + 6
@@ -74,15 +75,15 @@ class Structure:
 
         return '\n'.join(lines)
 
-    def __eq__(self, other):
-        assert isinstance(other, Structure), 'Other object must belong to Structure class'
+    def __eq__(self, other: Structure) -> bool:
+        assert isinstance(other, Structure), 'Other object be a Structure class'
         if not self.coords_are_cartesian == other.coords_are_cartesian:
             if self.coords_are_cartesian:
                 other.mod_coords_to_cartesian()
-                print(colored('Coords of other were modded into Cartesian', color='green'))
+                print(colored('Coords of other were modified into Cartesian', color='green'))
             else:
                 other.mod_coords_to_direct()
-                print(colored('Coords of other were modded into Direct', color='green'))
+                print(colored('Coords of other were modified into Direct', color='green'))
         return np.allclose(self.lattice, other.lattice, atol=1e-10, rtol=1e-10) and \
             (self.species == other.species) and \
             np.allclose(self.coords, other.coords, atol=1e-10, rtol=1e-10)
@@ -111,7 +112,8 @@ class Structure:
         else:
             self.species += species
 
-    def mod_delete_atoms(self, ids) -> None:
+    def mod_delete_atoms(self,
+                         ids: int | list[int]) -> None:
         """
         Deletes selected atoms by ids
         Args:
@@ -120,7 +122,10 @@ class Structure:
         self.coords = np.delete(self.coords, ids, axis=0)
         self.species = np.delete(self.species, ids)
 
-    def mod_change_atoms(self, ids, coords, species) -> None:
+    def mod_change_atoms(self,
+                         ids: int | list[int],
+                         coords: NDArray[Shape['Nids, 3'], Number] | None,
+                         species: str | list[str] | None) -> None:
         """
         Change selected atom by id
         Args:
@@ -140,7 +145,7 @@ class Structure:
             else:
                 self.species[ids] = species
 
-    def mod_coords_to_cartesian(self) -> Union[None, str]:
+    def mod_coords_to_cartesian(self) -> None | str:
         """
         Converts species coordinates to Cartesian coordination system.
         """
@@ -150,7 +155,7 @@ class Structure:
             self.coords = np.matmul(self.coords, self.lattice)
             self.coords_are_cartesian = True
 
-    def mod_coords_to_direct(self) -> Union[None, str]:
+    def mod_coords_to_direct(self) -> None | str:
         """
         Converts species coordinates to Direct coordination system.
         """
@@ -161,7 +166,9 @@ class Structure:
             self.coords = np.matmul(self.coords, transform)
             self.coords_are_cartesian = False
 
-    def mod_add_vector(self, vector, cartesian=True) -> None:
+    def mod_add_vector(self,
+                       vector: NDArray[Shape['3'], Number],
+                       cartesian: bool = True) -> None:
         """
         Adds a vector to all atoms.
         Args:
@@ -202,8 +209,13 @@ class Structure:
                             self.coords = np.vstack((self.coords, ref_coords + vector))
                             self.species += ref_species
             self.lattice = np.array([a, b, c]).reshape(-1, 1) * self.lattice
+        else:
+            raise ValueError(f'a, b and c must be positive. But {a=} {b=} {c=}')
 
-    def get_vector(self, id_1, id_2, unit=True) -> np.ndarray:
+    def get_vector(self,
+                   id_1: int,
+                   id_2: int,
+                   unit: bool = True) -> NDArray[Shape['3'], Number]:
         """
         Returns a vector (unit vector by default) which starts in the atom with id_1 and points to the atom with id_2
         Args:
@@ -218,7 +230,7 @@ class Structure:
         else:
             return vector
 
-    def get_distance_matrix(self) -> np.ndarray:
+    def get_distance_matrix(self) -> NDArray[Shape['Natoms, Natoms, 3'], Number]:
         """
         Returns distance matrix R, where R[i,j] is the vector from atom i to atom j.
 
@@ -233,7 +245,7 @@ class Structure:
         assert np.all(R >= - 0.5) and np.all(R <= 0.5)
         return np.matmul(R, self.lattice)
 
-    def get_distance_matrix_scalar(self) -> np.ndarray:
+    def get_distance_matrix_scalar(self) -> NDArray[Shape['Natoms, Natoms'], Number]:
         """
         Returns distance matrix R, where R[i, j] is the Euclidean norm of a vector from atom i to atom j.
 
