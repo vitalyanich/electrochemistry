@@ -197,7 +197,7 @@ class Outcar(EBS, IonicDynamics):
                  energy_ionic_hist: NDArray[Shape['Nisteps'], Number],
                  forces_hist: NDArray[Shape['Nispeps, Natoms, 3'], Number]):
         EBS.__init__(self, eigenvalues_hist[-1], weights, efermi_hist[-1], occupations_hist[-1])
-        IonicDynamics.__init__(self, forces_hist)
+        IonicDynamics.__init__(self, forces_hist, None, None, None)
 
         self.efermi_hist = efermi_hist
         self.energy_hist = energy_hist
