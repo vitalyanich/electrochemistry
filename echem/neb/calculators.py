@@ -68,7 +68,6 @@ class JDFTx(Calculator):
                 elif com == 'dump':
                     self.addDump(val.split()[0], val.split()[1])
                 else:
-
                     self.addCommand(com, val)
 
         if ('End', 'State') not in self.dumps:
