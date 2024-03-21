@@ -19,7 +19,7 @@ class NEBOptimizer:
     def __init__(self,
                  neb: NEB,
                  trajectory_filepath: str | Path | None = None,
-                 append_trajectory: bool = False):
+                 append_trajectory: bool = True):
 
         self.neb = neb
         if trajectory_filepath is not None:
@@ -288,7 +288,7 @@ class NEB_JDFTx:
                                                                      format='vasp')
                 trj.close()
 
-            elif self.restart == 'from_traj' or self.restart == 'from_vasp':
+            if self.restart == 'from_traj' or self.restart == 'from_vasp':
                 for i in range(self.nimages + 2):
                     img = read(f'start_img{str(i).zfill(length)}.vasp', format='vasp')
                     images.append(img)
