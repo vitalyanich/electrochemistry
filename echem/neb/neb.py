@@ -40,6 +40,9 @@ class NEBOptimizer:
     def get_forces(self):
         return self.neb.get_forces().reshape(-1)
 
+    def get_energies(self):
+        return [image.calc.E for image in self.neb.images[1:-1]]
+
     def dump_trajectory(self):
         if self.trj_writer is not None:
             for image in self.neb.nimages:
@@ -65,11 +68,7 @@ class NEBOptimizer:
             self.dump_positions_vasp()
 
             F = self.get_forces()
-
-            energies = []
-            for image in self.neb.images:
-                energies.append(np.round(image.calc.E, 4))
-            logging.info(f'Step: {i}. Energies: {energies}')
+            logging.info(f'Step: {i}. Energies: {[np.round(en, 4) for en in self.get_energies()]}')
 
             R = self.neb.get_residual()
             if R <= fmax:
@@ -142,10 +141,7 @@ class NEBOptimizer:
             self.update_positions(X_new)
             F_new = self.get_forces()  # Calculate the new forces at this position
 
-            energies = []
-            for image in self.neb.images:
-                energies.append(np.round(image.calc.E, 4))
-            logging.info(f'Step: {step}. Energies: {energies}')
+            logging.info(f'Step: {step}. Energies: {[np.round(en, 4) for en in self.get_energies()]}')
 
             R_new = self.neb.get_residual()
             logging.info(f'Step: {step}. Residual: {R:.3f}')
