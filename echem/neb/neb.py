@@ -116,11 +116,7 @@ class NEBOptimizer:
         """
 
         F = self.get_forces()
-
-        energies = []
-        for image in self.neb.images:
-            energies.append(image.calc.E)
-        logging.info(f'Step: 0. Energies: {energies}')
+        logging.info(f'Step: 0. Energies: {[np.round(en, 4) for en in self.get_energies()]}')
 
         R = self.neb.get_residual()  # pick the biggest force
 
