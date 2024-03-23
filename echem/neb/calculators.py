@@ -85,6 +85,8 @@ class JDFTx(Calculator):
         self.lastAtoms = None
         self.lastInput = None
 
+        self.global_step = None
+
         logging.info(f'Successfully initialized JDFTx calculator in \'{self.path_rundir}\'')
 
     def validCommand(self, command) -> bool:
@@ -158,11 +160,20 @@ class JDFTx(Calculator):
         file.write(inputfile)
         file.close()
 
-        logging.info(f'{self.path_rundir} Energy from the previous step: {self.E}')
-        logging.info(f'{self.path_rundir} Run JDFTx')
+        if self.global_step is not None:
+            logging.info(f'Step: {self.global_step}. JDFTx: run in {self.path_rundir}')
+        else:
+            logging.info(f'JDFTx: run in {self.path_rundir}')
+
         shell(f'cd {self.path_rundir} && srun {self.path_jdftx_executable} -i input.in -o {self.output_name}')
 
         self.E = self.__readEnergy(self.path_rundir / f'{self.jdftx_prefix}.Ecomponents')
+
+        if self.global_step is not None:
+            logging.info(f'Step: {self.global_step}. JDFTx: E = {self.E:.4f}')
+        else:
+            logging.info(f'JDFTx: E = {self.E:.4f}')
+
         self.forces = self.__readForces(self.path_rundir / f'{self.jdftx_prefix}.force')
 
     def constructInput(self, atoms) -> str:

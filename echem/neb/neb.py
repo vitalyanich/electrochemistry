@@ -45,13 +45,17 @@ class NEBOptimizer:
 
     def dump_trajectory(self):
         if self.trj_writer is not None:
-            for image in self.neb.nimages:
+            for image in self.neb.images:
                 self.trj_writer.write(image)
 
     def dump_positions_vasp(self):
         length = len(str(self.neb.nimages + 1))
-        for i, image in enumerate(self.neb.nimages):
+        for i, image in enumerate(self.neb.images):
             image.write(f'last_img{str(i).zfill(length)}.vasp', format='vasp')
+
+    def set_step_in_calculators(self, step):
+        for image in self.neb.images[1:-1]:
+            image.calc.global_step = step
 
     def run_static(self,
                    fmax: float = 0.1,
@@ -66,22 +70,24 @@ class NEBOptimizer:
         for i in range(max_steps):
             self.dump_trajectory()
             self.dump_positions_vasp()
+            self.set_step_in_calculators(i)
 
             F = self.get_forces()
-            logging.info(f'Step: {i}. Energies: {[np.round(en, 4) for en in self.get_energies()]}')
+            logging.info(f'Step: {i}. NEBOptimizer: Energies = '
+                         f'{[np.round(en, 4) for en in self.get_energies()]}')
 
             R = self.neb.get_residual()
             if R <= fmax:
-                logging.info(f"static: terminates successfully after {i} iterations. "
-                             f"Residual R = {R:.3f}")
+                logging.info(f"Step: {i}. NEBOptimizer: optimization terminates successfully. "
+                             f"Residual R = {R:.4f}")
                 return True
             else:
-                logging.info(f'Step: {i}. Residual: {R:.3f}')
+                logging.info(f'Step: {i}. NEBOptimizer: Residual R = {R:.4f}')
             X += alpha * F
             self.update_positions(X)
 
-        logging.info(f'static: convergence was not achieved after {max_steps} iterations. '
-                     f'Residual R = {R:.3f} > {fmax}')
+        logging.info(f'NEBOptimizer: convergence was not achieved after max iterations '
+                     f'iterations = {max_steps}, residual R = {R:.4f} > {fmax}')
         return False
 
     def run_ode(self,
@@ -115,38 +121,53 @@ class NEBOptimizer:
                relative tolerance
         """
 
+        if max_steps < 2:
+            raise ValueError('max_steps must be greater or equal than two')
+
+        self.set_step_in_calculators(0)
+
         F = self.get_forces()
-        logging.info(f'Step: 0. Energies: {[np.round(en, 4) for en in self.get_energies()]}')
+        logging.info(f'Step: 0. NEBOptimizer: energies = {[np.round(en, 4) for en in self.get_energies()]}')
 
         R = self.neb.get_residual()  # pick the biggest force
 
         if R >= R_max:
-            logging.info(f"ODE12r: Residual {R:.3f} >= R_max {R_max} at iteration 0")
-            raise OptimizerConvergenceError(f"ODE12r: Residual {R:.3f} >= R_max {R_max} at iteration 0")
+            logging.info(f'Step: 0. NEBOptimizer: residual {R:.4f} >= R_max {R_max}')
+            raise OptimizerConvergenceError(f'Step: 0. NEBOptimizer: residual {R:.4f} >= R_max {R_max}')
         else:
-            logging.info(f'Step: 0. Residual: {R:.3f}')
+            logging.info(f'Step: 0. NEBOptimizer: residual R = {R:.4f}')
 
         if h is None:
             h = 0.5 * rtol ** 0.5 / R  # Chose a step size based on that force
             h = max(h, h_min)  # Make sure the step size is not too big
+        logging.info(f'Step: 0. NEBOptimizer: step size h = {h}')
 
         X = self.neb.get_positions().reshape(-1)
 
         for step in range(1, max_steps):
             X_new = X + h * F  # Pick a new position
             self.update_positions(X_new)
-            F_new = self.get_forces()  # Calculate the new forces at this position
 
-            logging.info(f'Step: {step}. Energies: {[np.round(en, 4) for en in self.get_energies()]}')
+            self.set_step_in_calculators(step)
+            F_new = self.get_forces()  # Calculate the new forces at this position
+            logging.info(f'Step: {step}. NEBOptimizer: '
+                         f'energies = {[np.round(en, 4) for en in self.get_energies()]}')
 
             R_new = self.neb.get_residual()
-            logging.info(f'Step: {step}. Residual: {R:.3f}')
+            logging.info(f'Step: {step}. NEBOptimizer: at new coordinates R = {R:.4f} -> R_new = {R_new:.4f}')
 
             e = 0.5 * h * (F_new - F)  # Estimate the area under the forces curve
             err = np.linalg.norm(e, np.inf)  # Error estimate
 
             # Accept step if residual decreases sufficiently and/or error acceptable
-            accept = ((R_new <= R * (1 - C1 * h)) or ((R_new <= R * C2) and err <= rtol))
+            condition_1 = R_new <= R * (1 - C1 * h)
+            condition_2 = R_new <= R * C2
+            condition_3 = err <= rtol
+            accept = condition_1 or (condition_2 and condition_3)
+            logging.info(f'Step: {step}. NEBOptimizer: R_new <= R * (1 - C1 * h) is {condition_1}')
+            logging.info(f'Step: {step}. NEBOptimizer: R_new <= R * C2 is {condition_2}')
+            logging.info(f'Step: {step}. NEBOptimizer: err <= rtol is {condition_3}')
+            #accept = ((R_new <= R * (1 - C1 * h)) or ((R_new <= R * C2) and err <= rtol))
 
             # Pick an extrapolation scheme for the system & find new increment
             y = F - F_new
@@ -164,9 +185,8 @@ class NEBOptimizer:
 
             h_err = h * 0.5 * np.sqrt(rtol / err)
 
-            # Accept the step and do the update
             if accept:
-                logging.info(f'The step {step} is accepted')
+                logging.info(f'Step: {step}. NEBOptimizer: the displacement is accepted')
 
                 X = X_new
                 R = R_new
@@ -177,36 +197,30 @@ class NEBOptimizer:
 
                 # We check the residuals again
                 if self.converged(fmax):
-                    logging.info(f"ODE12r: terminates successfully after {step} iterations. "
-                                 f"Residual {R:.3f}")
+                    logging.info(f"Step: {step}. NEBOptimizer: optimization terminates successfully")
                     return True
 
-                if R >= R_max:
-                    logging.info(f"ODE12r: Residual {R:.3f} is too large")
+                if R > R_max:
+                    logging.info(f"Step: {step}. NEBOptimizer: optimization fails, R = {R:.4f} > R_max = {R_max}")
                     return False
 
                 # Compute a new step size.
                 # Based on the extrapolation and some other heuristics
                 h = max(0.25 * h, min(4 * h, h_err, h_ls))  # Log steep-size analytic results
-
-                logging.info(f"ODE12r: new step size h = {h}")
-                logging.info(f"ODE12r: residual {R=}")
-                logging.info(f"ODE12r: {h_ls=}")
-                logging.info(f"ODE12r: {h_err=}")
+                logging.info(f'Step: {step}. NEBOptimizer: new step size h = {h}')
 
             else:
-                logging.info(f'The step {step} is rejected')
-
-                # Compute a new step size.
+                logging.info(f'Step: {step}. NEBOptimizer: the displacement is rejected')
                 h = max(0.1 * h, min(0.25 * h, h_err, h_ls))
-                logging.info(f"ODE12r: new step size h = {h}")
-                logging.info(f"ODE12r: R_new = {R_new}")
-                logging.info(f"ODE12r: R = {R}")
+                logging.info(f'Step: {step}. NEBOptimizer: new step size h = {h}')
 
-            if abs(h) <= h_min:  # abort if step size is too small
-                logging.info(f'ODE12r terminates unsuccessfully. Step size {h=} is too small')
+            if abs(h) < h_min:  # abort if step size is too small
+                logging.info(f'Step: {step}. NEBOptimizer: stop optimization since step size '
+                             f'h = {h} < h_min = {h_min}')
+                return True
 
-        logging.info(f'ODE12r terminates unsuccessfully after {max_steps} iterations')
+        logging.info(f'Step: {step}. NEBOptimizer: convergence was not achieved after max iterations '
+                     f'iterations = {max_steps}. ')
         return True
 
 
