@@ -53,18 +53,18 @@ class JDFTx(Calculator):
         if commands is not None:
             for com, val in commands:
                 if com == 'dump-name':
-                    logging.info(f'{self.path_rundir} You set \'dump-name\' command in commands = \'{val}\', '
-                                 f'however it will be replaced with \'{self.jdftx_prefix}.$VAR\'')
+                    self.logger.debug(f'{self.path_rundir} You set \'dump-name\' command in commands = \'{val}\', '
+                                      f'however it will be replaced with \'{self.jdftx_prefix}.$VAR\'')
                 elif com == 'initial-state':
-                    logging.info(f'{self.path_rundir} You set \'initial-state\' command in commands = \'{val}\', '
-                                 f'however it will be replaced with \'{self.jdftx_prefix}.$VAR\'')
+                    self.logger.debug(f'{self.path_rundir} You set \'initial-state\' command in commands = \'{val}\', '
+                                      f'however it will be replaced with \'{self.jdftx_prefix}.$VAR\'')
                 elif com == 'coords-type':
-                    logging.info(f'{self.path_rundir} You set \'coords-type\' command in commands = \'{val}\', '
-                                 f'however it will be replaced with \'cartesian\'')
+                    self.logger.debug(f'{self.path_rundir} You set \'coords-type\' command in commands = \'{val}\', '
+                                      f'however it will be replaced with \'cartesian\'')
                 elif com == 'include':
-                    logging.info(f'{self.path_rundir} \'include\' command is not supported, ignore it')
+                    self.logger.debug(f'{self.path_rundir} \'include\' command is not supported, ignore it')
                 elif com == 'coulomb-interaction':
-                    logging.info(f'{self.path_rundir} \'coulomb-interaction\' command will be replaced in accordance with ase atoms')
+                    self.logger.debug(f'{self.path_rundir} \'coulomb-interaction\' command will be replaced in accordance with ase atoms')
                 elif com == 'dump':
                     self.addDump(val.split()[0], val.split()[1])
                 else:
@@ -87,7 +87,7 @@ class JDFTx(Calculator):
 
         self.global_step = None
 
-        logging.info(f'Successfully initialized JDFTx calculator in \'{self.path_rundir}\'')
+        self.logger.debug(f'Successfully initialized JDFTx calculator in \'{self.path_rundir}\'')
 
     def validCommand(self, command) -> bool:
         """Checks whether the input string is a valid jdftx command by comparing to the input template (jdft -t)"""
@@ -161,18 +161,18 @@ class JDFTx(Calculator):
         file.close()
 
         if self.global_step is not None:
-            logging.info(f'Step: {self.global_step}. JDFTx: run in {self.path_rundir}')
+            self.logger.info(f'Step: {self.global_step}. JDFTx: run in {self.path_rundir}')
         else:
-            logging.info(f'JDFTx: run in {self.path_rundir}')
+            self.logger.info(f'JDFTx: run in {self.path_rundir}')
 
         shell(f'cd {self.path_rundir} && srun {self.path_jdftx_executable} -i input.in -o {self.output_name}')
 
         self.E = self.__readEnergy(self.path_rundir / f'{self.jdftx_prefix}.Ecomponents')
 
         if self.global_step is not None:
-            logging.info(f'Step: {self.global_step}. JDFTx: E = {self.E:.4f}')
+            self.logger.debug(f'Step: {self.global_step}. JDFTx: E = {self.E:.4f}')
         else:
-            logging.info(f'JDFTx: E = {self.E:.4f}')
+            self.logger.debug(f'JDFTx: E = {self.E:.4f}')
 
         self.forces = self.__readForces(self.path_rundir / f'{self.jdftx_prefix}.force')
 
