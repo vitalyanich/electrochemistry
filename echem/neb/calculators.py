@@ -27,7 +27,7 @@ class JDFTx(Calculator):
                  jdftx_prefix: str = 'jdft',
                  output_name: str = 'output.out'):
 
-        self.logger = logging.getLogger('JDFTx')
+        self.logger = logging.getLogger(self.__class__.__name__ + ':')
 
         if isinstance(path_jdftx_executable, str):
             self.path_jdftx_executable = Path(path_jdftx_executable)
@@ -41,7 +41,8 @@ class JDFTx(Calculator):
         elif path_rundir is None:
             self.path_rundir = Path(tempfile.mkdtemp())
         else:
-            raise ValueError(f'path_rundir should be str or Path or None, however you set {path_rundir=}')
+            raise ValueError(f'path_rundir should be str or Path or None, however you set {path_rundir=}'
+                             f' with type {type(path_rundir)}')
 
         self.jdftx_prefix = jdftx_prefix
         self.output_name = output_name
@@ -161,18 +162,18 @@ class JDFTx(Calculator):
         file.close()
 
         if self.global_step is not None:
-            self.logger.info(f'Step: {self.global_step}. JDFTx: run in {self.path_rundir}')
+            self.logger.info(f'Step: {self.global_step}. Run in {self.path_rundir}')
         else:
-            self.logger.info(f'JDFTx: run in {self.path_rundir}')
+            self.logger.info(f'run in {self.path_rundir}')
 
         shell(f'cd {self.path_rundir} && srun {self.path_jdftx_executable} -i input.in -o {self.output_name}')
 
         self.E = self.__readEnergy(self.path_rundir / f'{self.jdftx_prefix}.Ecomponents')
 
         if self.global_step is not None:
-            self.logger.debug(f'Step: {self.global_step}. JDFTx: E = {self.E:.4f}')
+            self.logger.debug(f'Step: {self.global_step}. E = {self.E:.4f}')
         else:
-            self.logger.debug(f'JDFTx: E = {self.E:.4f}')
+            self.logger.debug(f'E = {self.E:.4f}')
 
         self.forces = self.__readForces(self.path_rundir / f'{self.jdftx_prefix}.force')
 
