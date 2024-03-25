@@ -10,22 +10,28 @@ from pathlib import Path
 import numpy as np
 import logging
 import os
-from typing import Literal
+import subprocess
+from typing import Literal, Callable
 logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.INFO,
                     format="%(asctime)s %(levelname)8s %(name)14s %(message)s",
                     datefmt='%d/%m/%Y %H:%M:%S')
+
+
+def shell(cmd) -> str:
+    '''
+    Run shell command and return output as a string
+    '''
+    return subprocess.check_output(cmd, shell=True)
 
 
 class NEBOptimizer:
     def __init__(self,
                  neb: NEB,
                  trajectory_filepath: str | Path | None = None,
-                 append_trajectory: bool = True,
-                 dE_max: float = None):
+                 append_trajectory: bool = True):
 
         self.neb = neb
         self.logger = logging.getLogger(self.__class__.__name__ + ':')
-        self.dE_max = dE_max
         self.E_image_first = None
         self.E_image_last = None
 
@@ -74,7 +80,9 @@ class NEBOptimizer:
     def run_static(self,
                    fmax: float = 0.1,
                    max_steps: int = 100,
-                   alpha: float = 0.1):
+                   alpha: float = 0.1,
+                   dE_max: float = None,
+                   construct_calc_fn: Callable = None):
 
         if max_steps < 1:
             raise ValueError('max_steps must be greater or equal than one')
@@ -104,10 +112,23 @@ class NEBOptimizer:
             X += alpha * F
             self.update_positions(X)
 
-            if self.dE_max is not None:
+            if dE_max is not None:
                 energies = self.get_energies(first=True, last=True)
                 diff = np.diff(energies)
+                idxs = np.where(diff > dE_max)
+                if len(idxs[0]) > 0:
+                    for idx in reversed(idxs):
+                        tmp_images = [self.neb.images[idx].copy(),
+                                      self.neb.images[idx].copy(),
+                                      self.neb.images[idx + 1].copy()]
+                        tmp_neb = NEB(tmp_images)
+                        tmp_neb.interpolate()
+                        self.neb.images.insert(idx, tmp_neb.images[1])
+                        for j in range(len(self.neb.images) - 2, idx + 1, -1):
+                            shell(f'mv {j} {j + 1}')
 
+                        for k, image in enumerate(self.neb.images):
+                            image.calc = construct_calc_fn(k)
 
         self.logger.warning(f'convergence was not achieved after max iterations = {max_steps}, '
                             f'residual R = {R:.4f} > {fmax}')
