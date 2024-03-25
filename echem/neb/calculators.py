@@ -162,7 +162,7 @@ class JDFTx(Calculator):
         file.close()
 
         if self.global_step is not None:
-            self.logger.info(f'Step: {self.global_step}. Run in {self.path_rundir}')
+            self.logger.info(f'Step: {self.global_step:2}. Run in {self.path_rundir}')
         else:
             self.logger.info(f'run in {self.path_rundir}')
 
