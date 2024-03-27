@@ -1,18 +1,11 @@
 from __future__ import annotations
-import subprocess
 import tempfile
 import numpy as np
 from ase.calculators.interface import Calculator
 from echem.core.constants import Hartree2eV, Angstrom2Bohr, Bohr2Angstrom
+from echem.core.useful_funcs import shell
 from pathlib import Path
 import logging
-
-
-def shell(cmd) -> str:
-    '''
-    Run shell command and return output as a string
-    '''
-    return subprocess.check_output(cmd, shell=True)
 
 
 # Atomistic Simulation Environment (ASE) calculator interface for JDFTx

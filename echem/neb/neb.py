@@ -6,22 +6,15 @@ from ase.io import read
 from echem.neb.calculators import JDFTx
 from echem.neb.autoneb import AutoNEB
 from echem.io_data.jdftx import Ionpos, Lattice, Input
+from echem.core.useful_funcs import shell
 from pathlib import Path
 import numpy as np
 import logging
 import os
-import subprocess
 from typing import Literal, Callable
 logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.INFO,
                     format="%(asctime)s %(levelname)8s %(name)14s %(message)s",
                     datefmt='%d/%m/%Y %H:%M:%S')
-
-
-def shell(cmd) -> str:
-    '''
-    Run shell command and return output as a string
-    '''
-    return subprocess.check_output(cmd, shell=True)
 
 
 class NEBOptimizer:
@@ -89,7 +82,7 @@ class NEBOptimizer:
 
         X = self.neb.get_positions().reshape(-1)
 
-        if self.dE_max is not None:
+        if dE_max is not None:
             self.E_image_first = self.neb.images[0].get_potential_energy()
             self.E_image_last = self.neb.images[-1].get_potential_energy()
 
@@ -128,7 +121,7 @@ class NEBOptimizer:
                             shell(f'mv {j} {j + 1}')
 
                         for k, image in enumerate(self.neb.images):
-                            image.calc = construct_calc_fn(k)
+                            image.calc = construct_calc_fn(k, len(str(len(self.neb.images))))
 
         self.logger.warning(f'convergence was not achieved after max iterations = {max_steps}, '
                             f'residual R = {R:.4f} > {fmax}')
@@ -299,9 +292,10 @@ class NEB_JDFTx:
         self.optimizer = None
 
     def prepare(self):
-        length = len(str(self.nimages))
         if self.dE_max is not None:
-            length += 1
+            length = len(str(self.nimages)) + 1
+        else:
+            length = len(str(self.nimages))
 
         if self.restart is False:
             if self.input_format == 'jdftx':
@@ -355,6 +349,11 @@ class NEB_JDFTx:
         for i in range(self.nimages):
             folder = Path(str(i+1).zfill(length))
             folder.mkdir(exist_ok=True)
+        if self.dE_max is not None:
+            folder = Path(str(0).zfill(length))
+            folder.mkdir(exist_ok=True)
+            folder = Path(str(self.nimages).zfill(length))
+            folder.mkdir(exist_ok=True)
 
         for i, image in enumerate(images[1:-1]):
             image.calc = JDFTx(self.path_jdftx_executable,
@@ -370,8 +369,7 @@ class NEB_JDFTx:
                                     commands=self.jdftx_input.commands)
 
         self.optimizer = NEBOptimizer(neb=neb,
-                                      trajectory_filepath='NEB_trajectory.traj',
-                                      dE_max=self.dE_max)
+                                      trajectory_filepath='NEB_trajectory.traj')
 
     def run(self,
             fmax: float = 0.1,
@@ -381,10 +379,17 @@ class NEB_JDFTx:
 
         self.prepare()
 
+        if self.dE_max is not None:
+            def calc_fn(k: int, zfill_length: int) -> JDFTx:
+                return JDFTx(self.path_jdftx_executable,
+                             path_rundir=self.path_rundir / str(k).zfill(zfill_length),
+                             commands=self.jdftx_input.commands)
+        else:
+            calc_fn = None
         if method == 'ode':
             self.optimizer.run_ode(fmax, max_steps)
         elif method == 'static':
-            self.optimizer.run_static(fmax, max_steps)
+            self.optimizer.run_static(fmax, max_steps, dE_max=self.dE_max, construct_calc_fn=calc_fn)
         else:
             raise ValueError(f'Method must be ode or static but you set {method=}')
 

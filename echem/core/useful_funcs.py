@@ -1,4 +1,5 @@
 import numpy as np
+import subprocess
 
 
 class ClassMethods:
@@ -14,3 +15,10 @@ class ClassMethods:
 
 def nearest_array_index(array, value):
     return (np.abs(array - value)).argmin()
+
+
+def shell(cmd) -> str:
+    '''
+    Run shell command and return output as a string
+    '''
+    return subprocess.check_output(cmd, shell=True)
