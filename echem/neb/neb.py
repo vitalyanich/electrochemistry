@@ -12,7 +12,7 @@ import numpy as np
 import logging
 import os
 from typing import Literal, Callable
-logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.INFO,
+logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.DEBUG,
                     format="%(asctime)s %(levelname)8s %(name)14s %(message)s",
                     datefmt='%d/%m/%Y %H:%M:%S')
 
@@ -66,9 +66,19 @@ class NEBOptimizer:
         for i, image in enumerate(self.neb.images):
             image.write(f'last_img{str(i).zfill(length)}.vasp', format='vasp')
 
-    def set_step_in_calculators(self, step):
-        for image in self.neb.images[1:-1]:
-            image.calc.global_step = step
+    def set_step_in_calculators(self, step, first: bool = False, last: bool = False):
+        if not first and not last:
+            for image in self.neb.images[1:-1]:
+                image.calc.global_step = step
+        elif first and not last:
+            for image in self.neb.images[:-1]:
+                image.calc.global_step = step
+        elif not first and last:
+            for image in self.neb.images[1:]:
+                image.calc.global_step = step
+        elif first and last:
+            for image in self.neb.images:
+                image.calc.global_step = step
 
     def run_static(self,
                    fmax: float = 0.1,
@@ -76,6 +86,11 @@ class NEBOptimizer:
                    alpha: float = 0.1,
                    dE_max: float = None,
                    construct_calc_fn: Callable = None):
+        self.logger.info('Static method of optimization was chosen')
+        if dE_max is not None:
+            self.logger.info(f'AutoNEB with max {dE_max} eV difference between images was set')
+            self.logger.info(f'Initial number of images is {self.neb.nimages}, '
+                             f'excluding initial and final images')
 
         if max_steps < 1:
             raise ValueError('max_steps must be greater or equal than one')
@@ -83,44 +98,73 @@ class NEBOptimizer:
         X = self.neb.get_positions().reshape(-1)
 
         if dE_max is not None:
+            self.set_step_in_calculators(0, first=True, last=True)
+            self.logger.debug('Trying to get potential energy from 0 image')
             self.E_image_first = self.neb.images[0].get_potential_energy()
+            self.logger.debug('Trying to get potential energy from last image')
             self.E_image_last = self.neb.images[-1].get_potential_energy()
 
-        length = len(str(max_steps))
-        for i in range(max_steps):
+        length_step = len(str(max_steps))
+        for step in range(max_steps):
             self.dump_trajectory()
             self.dump_positions_vasp()
-            self.set_step_in_calculators(i)
+            self.set_step_in_calculators(step, first=True, last=True)
 
             F = self.get_forces()
-            self.logger.info(f'Step: {i:{length}}. Energies = '
+            self.logger.info(f'Step: {step:{length_step}}. Energies = '
                              f'{[np.round(en, 4) for en in self.get_energies()]}')
 
             R = self.neb.get_residual()
             if R <= fmax:
-                self.logger.info(f'Step: {i:{length}}. Optimization terminates successfully. Residual R = {R:.4f}')
+                self.logger.info(f'Step: {step:{length_step}}. Optimization terminates successfully. Residual R = {R:.4f}')
                 return True
             else:
-                self.logger.info(f'Step: {i:{length}}. Residual R = {R:.4f}')
+                self.logger.info(f'Step: {step:{length_step}}. Residual R = {R:.4f}')
             X += alpha * F
             self.update_positions(X)
 
             if dE_max is not None:
                 energies = self.get_energies(first=True, last=True)
+                self.logger.info(f'Step: {step:{length_step}}. Energies = '
+                                 f'{[np.round(en, 4) for en in energies]}')
                 diff = np.diff(energies)
+                self.logger.debug(f'Diff: {diff}')
                 idxs = np.where(diff > dE_max)
+                self.logger.debug(f'Idxs: {idxs[0]}')
                 if len(idxs[0]) > 0:
-                    for idx in reversed(idxs):
+                    for idx in reversed(idxs[0]):
+                        self.logger.debug(f'Start working with idx: {idx}')
+                        length_prev = len(str(len(self.neb.images)))
+                        length_new = len(str(len(self.neb.images) + 1))
+                        self.logger.debug(f'{length_prev=} {length_new=}')
                         tmp_images = [self.neb.images[idx].copy(),
                                       self.neb.images[idx].copy(),
                                       self.neb.images[idx + 1].copy()]
                         tmp_neb = NEB(tmp_images)
                         tmp_neb.interpolate()
-                        self.neb.images.insert(idx, tmp_neb.images[1])
-                        for j in range(len(self.neb.images) - 2, idx + 1, -1):
-                            shell(f'mv {j} {j + 1}')
+                        images_new = self.neb.images.copy()
+                        images_new.insert(idx, tmp_neb.images[1])
+                        self.neb = NEB(images_new)
+
+                        if length_prev != length_new:
+                            self.logger.debug('Trying to rename due to the change in length')
+                            for i in range(0, self.neb.nimages + 1):
+                                shell(f'mv {str(i).zfill(length_prev)} {str(i).zfill(length_new)}')
+
+                        self.logger.debug('Trying to rename due to the insertion')
+                        for i in range(len(self.neb.images) - 2, idx, -1):
+                            self.logger.debug(f'{i=}')
+                            self.logger.debug(f'Trying to execute the following command: '
+                                              f'mv {str(i).zfill(length_new)} {str(i + 1).zfill(length_new)}')
+                            shell(f'mv {str(i).zfill(length_new)} {str(i + 1).zfill(length_new)}')
+
+                        self.logger.debug(f'Trying to create the new folder: {str(idx).zfill(length_new)}')
+                        folder = Path(str(idx + 1).zfill(length_new))
+                        folder.mkdir()
 
                         for k, image in enumerate(self.neb.images):
+                            self.logger.debug(f'Trying to rename attach the calc to {k} image '
+                                              f'with the length: {len(str(len(self.neb.images)))}')
                             image.calc = construct_calc_fn(k, len(str(len(self.neb.images))))
 
         self.logger.warning(f'convergence was not achieved after max iterations = {max_steps}, '
@@ -290,6 +334,7 @@ class NEB_JDFTx:
         self.interpolation_method = interpolation_method.lower()
         self.dE_max = dE_max
         self.optimizer = None
+        self.logger = logging.getLogger(self.__class__.__name__ + ':')
 
     def prepare(self):
         if self.dE_max is not None:
@@ -350,9 +395,11 @@ class NEB_JDFTx:
             folder = Path(str(i+1).zfill(length))
             folder.mkdir(exist_ok=True)
         if self.dE_max is not None:
+            self.logger.debug(f'Trying to create the folder {str(0).zfill(length)}')
             folder = Path(str(0).zfill(length))
             folder.mkdir(exist_ok=True)
-            folder = Path(str(self.nimages).zfill(length))
+            self.logger.debug(f'Trying to create the folder {str(self.nimages + 1).zfill(length)}')
+            folder = Path(str(self.nimages + 1).zfill(length))
             folder.mkdir(exist_ok=True)
 
         for i, image in enumerate(images[1:-1]):

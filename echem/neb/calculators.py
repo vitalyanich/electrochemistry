@@ -157,7 +157,7 @@ class JDFTx(Calculator):
         if self.global_step is not None:
             self.logger.info(f'Step: {self.global_step:2}. Run in {self.path_rundir}')
         else:
-            self.logger.info(f'run in {self.path_rundir}')
+            self.logger.info(f'Run in {self.path_rundir}')
 
         shell(f'cd {self.path_rundir} && srun {self.path_jdftx_executable} -i input.in -o {self.output_name}')
 
