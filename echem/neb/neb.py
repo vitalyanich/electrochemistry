@@ -149,8 +149,8 @@ class NEBOptimizer:
                     steps_after_insertion = -1
                     for idx in reversed(idxs):
                         self.logger.debug(f'Start working with idx: {idx}')
-                        length_prev = len(str(len(self.neb.images)))
-                        length_new = len(str(len(self.neb.images) + 1))
+                        length_prev = len(str(len(self.neb.images) - 1))
+                        length_new = len(str(len(self.neb.images)))
                         self.logger.debug(f'{length_prev=} {length_new=}')
                         tmp_images = [self.neb.images[idx].copy(),
                                       self.neb.images[idx].copy(),
