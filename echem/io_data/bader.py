@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from pathlib import Path
 from nptyping import NDArray, Shape, Number
