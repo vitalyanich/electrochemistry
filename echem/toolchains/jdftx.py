@@ -1,4 +1,3 @@
-from __future__ import annotations
 from pathlib import Path
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
@@ -169,10 +168,11 @@ class InfoExtractor:
                                   color='red', attrs=['bold']),
                           colored('has output and phonon output for different systems'))
 
-    def extract_info_multiple(self,
-                              path_root_folder: str | Path,
-                              recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
-                              num_workers: int = 1) -> None:
+    def get_info_multiple(self,
+                          path_root_folder: str | Path,
+                          recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
+                          num_workers: int = 1,
+                          parse_folders_names=True) -> None:
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
 
@@ -182,12 +182,14 @@ class InfoExtractor:
 
         with tqdm(total=len(subfolders)) as pbar:
             with ThreadPoolExecutor(num_workers) as executor:
-                for _ in executor.map(self.extract_info, subfolders, [recreate_files] * len(subfolders)):
+                for _ in executor.map(self.get_info, subfolders, [recreate_files] * len(subfolders), \
+                                      [parse_folders_names] * len(subfolders)):
                     pbar.update()
 
-    def extract_info(self,
-                     path_root_folder: str | Path,
-                     recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None) -> None:
+    def get_info(self,
+                 path_root_folder: str | Path,
+                 recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
+                 parse_folders_names=True) -> None:
 
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
@@ -207,51 +209,54 @@ class InfoExtractor:
                 recreate_files['volumes'] = False
 
         files = [file.name for file in path_root_folder.iterdir() if file.is_file()]
+        if parse_folders_names:
+            substrate, adsorbate, idx, *_ = path_root_folder.name.split('_')
+            idx = int(idx)
+            if 'vib' in _:
+                is_vib_folder = True
+            else:
+                is_vib_folder = False
+            if 'bad' in _:
+                return None
 
-        substrate, adsorbate, idx, *_ = path_root_folder.name.split('_')
-        idx = int(idx)
-        if 'vib' in _:
-            is_vib_folder = True
+            if is_vib_folder:
+                output_phonons = Output.from_file(path_root_folder / self.output_name)
+                if (output_phonons.phonons['zero'] is not None and any(output_phonons.phonons['zero'] > 1e-5)) or \
+                        (output_phonons.phonons['imag'] is not None and any(
+                            np.abs(output_phonons.phonons['imag']) > 1e-5)):
+                    print(colored(str(path_root_folder), color='yellow', attrs=['bold']))
+
+                    if output_phonons.phonons['zero'] is not None:
+                        string = '['
+                        for i in output_phonons.phonons['zero']:
+                            if i.imag != 0:
+                                string += str(i.real) + '+' + colored(str(i.imag) + 'j', color='yellow',
+                                                                      attrs=['bold']) + ', '
+                            else:
+                                string += str(i.real) + '+' + str(i.imag) + 'j, '
+                        string = string[:-2]
+                        string += ']'
+                        print(f'\t{len(output_phonons.phonons["zero"])} zero modes: {string}')
+
+                    if output_phonons.phonons['imag'] is not None:
+                        string = '['
+                        for i in output_phonons.phonons['imag']:
+                            if i.imag != 0:
+                                string += str(i.real) + '+' + colored(str(i.imag) + 'j', color='yellow',
+                                                                      attrs=['bold']) + ', '
+                            else:
+                                string += str(i.real) + '+' + str(i.imag) + 'j, '
+                        string = string[:-2]
+                        string += ']'
+                        print(f'\t{len(output_phonons.phonons["imag"])} imag modes: {string}')
+
+                output = None
+            else:
+                output = Output.from_file(path_root_folder / self.output_name)
+                output_phonons = None
         else:
             is_vib_folder = False
-        if 'bad' in _:
-            return None
-
-        if is_vib_folder:
-            output_phonons = Output.from_file(path_root_folder / self.output_name)
-            if (output_phonons.phonons['zero'] is not None and any(output_phonons.phonons['zero'] > 1e-5)) or \
-                    (output_phonons.phonons['imag'] is not None and any(np.abs(output_phonons.phonons['imag']) > 1e-5)):
-                print(colored(str(path_root_folder), color='yellow', attrs=['bold']))
-
-                if output_phonons.phonons['zero'] is not None:
-                    string = '['
-                    for i in output_phonons.phonons['zero']:
-                        if i.imag != 0:
-                            string += str(i.real) + '+' + colored(str(i.imag) + 'j', color='yellow',
-                                                                  attrs=['bold']) + ', '
-                        else:
-                            string += str(i.real) + '+' + str(i.imag) + 'j, '
-                    string = string[:-2]
-                    string += ']'
-                    print(f'\t{len(output_phonons.phonons["zero"])} zero modes: {string}')
-
-                if output_phonons.phonons['imag'] is not None:
-                    string = '['
-                    for i in output_phonons.phonons['imag']:
-                        if i.imag != 0:
-                            string += str(i.real) + '+' + colored(str(i.imag) + 'j', color='yellow',
-                                                                  attrs=['bold']) + ', '
-                        else:
-                            string += str(i.real) + '+' + str(i.imag) + 'j, '
-                    string = string[:-2]
-                    string += ']'
-                    print(f'\t{len(output_phonons.phonons["imag"])} imag modes: {string}')
-
-            output = None
-        else:
             output = Output.from_file(path_root_folder / self.output_name)
-            output_phonons = None
-
         if not is_vib_folder:
 
             if 'POSCAR' not in files or recreate_files['cars']:
@@ -336,23 +341,26 @@ class InfoExtractor:
             elif self.do_bader and valence_density_exist:
                 print('Run Bader for\t\t\t\t\t\t', colored(str(path_root_folder), attrs=['bold']))
 
-                string = str(path_root_folder.name.split('_')[1])
-                print_com = ''
-                if string != 'Pristine':
-                    print_com += ' -o atoms'
-                    length = len(re.findall(r'[A-Z]', string))
-                    ints = [int(i) for i in re.findall(r'[2-9]', re.sub(r'minus\d+.\d+|plus\d+.\d+', '', string))]
-                    length += sum(ints) - len(ints)
-                    while length > 0:
-                        print_com += f' -i {output.structure.natoms + 1 - length}'
-                        length -= 1
+                if parse_folders_names:
+                    string = str(path_root_folder.name.split('_')[1])
+                    print_com = ''
+                    if string != 'Pristine':
+                        print_com += ' -o atoms'
+                        length = len(re.findall(r'[A-Z]', string))
+                        ints = [int(i) for i in re.findall(r'[2-9]', re.sub(r'minus\d+.\d+|plus\d+.\d+', '', string))]
+                        length += sum(ints) - len(ints)
+                        while length > 0:
+                            print_com += f' -i {output.structure.natoms + 1 - length}'
+                            length -= 1
 
-                spin_com = ''
-                if f'{self.jdftx_prefix}.n_up' in files and \
-                        f'{self.jdftx_prefix}.n_dn' in files and \
-                        output.magnetization_abs > 1e-2:
-                    spin_com = ' -s ' + str(path_root_folder / 'spin__density.cube')
-
+                    spin_com = ''
+                    if f'{self.jdftx_prefix}.n_up' in files and \
+                            f'{self.jdftx_prefix}.n_dn' in files and \
+                            output.magnetization_abs > 1e-2:
+                        spin_com = ' -s ' + str(path_root_folder / 'spin__density.cube')
+                else:
+                    spin_com = ''
+                    print_com = ''
                 com = str(self.path_bader_executable) + ' -t cube' + \
                       print_com + spin_com + ' ' + str(path_root_folder / 'valence_density.cube')
                 p = Popen(com, cwd=path_root_folder)
@@ -425,7 +433,7 @@ class InfoExtractor:
                         string += ']'
                         print(f'\t{len(output_phonons.phonons["imag"])} imag modes: {string}')
 
-            if substrate == 'Mol':
+            if parse_folders_names and substrate == 'Mol':
                 if 'bader.ats' not in files or recreate_files['volumes']:
                     file = open(path_root_folder / 'bader.ats', 'w')
                     for name, coord in zip(output.structure.species, output.structure.coords):
@@ -468,40 +476,41 @@ class InfoExtractor:
             dos = None
             excluded_volumes = None
 
-        self.lock.acquire()
+        if parse_folders_names:
+            self.lock.acquire()
 
-        system_proccessed = self.get_system(substrate, adsorbate, idx)
-        if len(system_proccessed) == 1:
-            if output_phonons is not None:
-                system_proccessed[0]['output_phonons'] = output_phonons
+            system_proccessed = self.get_system(substrate, adsorbate, idx)
+            if len(system_proccessed) == 1:
+                if output_phonons is not None:
+                    system_proccessed[0]['output_phonons'] = output_phonons
+                else:
+                    system_proccessed[0]['output'] = output
+                    system_proccessed[0]['nac_ddec'] = nac_ddec
+                    system_proccessed[0]['dos'] = dos
+                    system_proccessed[0]['nac_bader'] = nac_bader
+                    system_proccessed[0]['excluded_volumes'] = excluded_volumes
+
+                self.lock.release()
+
+            elif len(system_proccessed) == 0:
+                system: System = {'substrate': substrate,
+                                  'adsorbate': adsorbate,
+                                  'idx': idx,
+                                  'output': output,
+                                  'nac_ddec': nac_ddec,
+                                  'output_phonons': output_phonons,
+                                  'dos': dos,
+                                  'nac_bader': nac_bader,
+                                  'excluded_volumes': excluded_volumes}
+
+                self.systems.append(system)
+                self.lock.release()
+
             else:
-                system_proccessed[0]['output'] = output
-                system_proccessed[0]['nac_ddec'] = nac_ddec
-                system_proccessed[0]['dos'] = dos
-                system_proccessed[0]['nac_bader'] = nac_bader
-                system_proccessed[0]['excluded_volumes'] = excluded_volumes
-
-            self.lock.release()
-
-        elif len(system_proccessed) == 0:
-            system: System = {'substrate': substrate,
-                              'adsorbate': adsorbate,
-                              'idx': idx,
-                              'output': output,
-                              'nac_ddec': nac_ddec,
-                              'output_phonons': output_phonons,
-                              'dos': dos,
-                              'nac_bader': nac_bader,
-                              'excluded_volumes': excluded_volumes}
-
-            self.systems.append(system)
-            self.lock.release()
-
-        else:
-            self.lock.release()
-            raise ValueError(f'There should be 0 ot 1 copy of the system in the InfoExtractor.'
-                             f'However there are {len(system_proccessed)} systems copies of following system: '
-                             f'{substrate=}, {adsorbate=}, {idx=}')
+                self.lock.release()
+                raise ValueError(f'There should be 0 ot 1 copy of the system in the InfoExtractor.'
+                                 f'However there are {len(system_proccessed)} systems copies of following system: '
+                                 f'{substrate=}, {adsorbate=}, {idx=}')
 
     def get_system(self, substrate: str, adsorbate: str, idx: int = None) -> list[System]:
         if idx is None:
@@ -567,7 +576,7 @@ class InfoExtractor:
     def get_Gibbs_vib(self, substrate: str, adsorbate: str, idx: int, T: float) -> float:
         return self.get_system(substrate, adsorbate, idx)[0]['output_phonons'].thermal_props.get_Gibbs_vib(T)
 
-    def plot_convergence(self, substrate: str, adsorbate: str):
+    def plot_energy(self, substrate: str, adsorbate: str):
 
         systems = self.get_system(substrate, adsorbate)
         energy_min = min(system['output'].energy for system in systems)
@@ -622,11 +631,11 @@ class InfoExtractor:
 
             delta_E = (out.energy - energy_min) * Hartree2eV
             if np.abs(delta_E) < 1e-8:
-                ax_e.text(0.5, 0.9, rf'$\mathbf{{E_f - E_f^{{min}} = {np.round(delta_E, 2)} \ eV}}$', ha='center', va='center', transform=ax_e.transAxes, fontsize=12)
-                ax_e.set_title(rf'$\mathbf{{ {substrate} \ {adsorbate} \ {system["idx"]} }}$', fontsize=13, y=1, pad=-15)
+                ax_e.text(0.5, 0.9, f'$\mathbf{{E_f - E_f^{{min}} = {np.round(delta_E, 2)} \ eV}}$', ha='center', va='center', transform=ax_e.transAxes, fontsize=12)
+                ax_e.set_title(f'$\mathbf{{ {substrate} \ {adsorbate} \ {system["idx"]} }}$', fontsize=13, y=1, pad=-15)
             else:
-                ax_e.text(0.5, 0.9, rf'$E_f - E_f^{{min}} = {np.round(delta_E, 2)} \ eV$', ha='center', va='center', transform=ax_e.transAxes, fontsize=12)
-                ax_e.set_title(rf'${substrate} \ {adsorbate} \ {system["idx"]}$', fontsize=13, y=1, pad=-15)
+                ax_e.text(0.5, 0.9, f'$E_f - E_f^{{min}} = {np.round(delta_E, 2)} \ eV$', ha='center', va='center', transform=ax_e.transAxes, fontsize=12)
+                ax_e.set_title(f'${substrate} \ {adsorbate} \ {system["idx"]}$', fontsize=13, y=1, pad=-15)
 
             ax_f = ax_e.twinx()
             ax_f.plot(range(len(out.get_forces())), out.get_forces() * Hartree2eV / (Bohr2Angstrom ** 2), color='g', label=r'$\left< |\vec{F}| \right>$', ms=3, marker='o')
