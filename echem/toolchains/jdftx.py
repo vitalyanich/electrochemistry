@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pathlib import Path
 from typing_extensions import Required, NotRequired, TypedDict
 from echem.io_data.jdftx import VolumetricData, Output, Lattice, Ionpos, Eigenvals, Fillings, kPts, DOS
@@ -168,11 +169,11 @@ class InfoExtractor:
                                   color='red', attrs=['bold']),
                           colored('has output and phonon output for different systems'))
 
-    def get_info_multiple(self,
-                          path_root_folder: str | Path,
-                          recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
-                          num_workers: int = 1,
-                          parse_folders_names=True) -> None:
+    def extract_info_multiple(self,
+                              path_root_folder: str | Path,
+                              recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
+                              num_workers: int = 1,
+                              parse_folders_names=True) -> None:
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
 
@@ -182,14 +183,14 @@ class InfoExtractor:
 
         with tqdm(total=len(subfolders)) as pbar:
             with ThreadPoolExecutor(num_workers) as executor:
-                for _ in executor.map(self.get_info, subfolders, [recreate_files] * len(subfolders), \
+                for _ in executor.map(self.extract_info, subfolders, [recreate_files] * len(subfolders), \
                                       [parse_folders_names] * len(subfolders)):
                     pbar.update()
 
-    def get_info(self,
-                 path_root_folder: str | Path,
-                 recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
-                 parse_folders_names=True) -> None:
+    def extract_info(self,
+                     path_root_folder: str | Path,
+                     recreate_files: dict[Literal['bader', 'ddec', 'cars', 'cubes', 'volumes'], bool] = None,
+                     parse_folders_names: bool = True) -> None:
 
         if isinstance(path_root_folder, str):
             path_root_folder = Path(path_root_folder)
@@ -257,6 +258,7 @@ class InfoExtractor:
         else:
             is_vib_folder = False
             output = Output.from_file(path_root_folder / self.output_name)
+
         if not is_vib_folder:
 
             if 'POSCAR' not in files or recreate_files['cars']:
