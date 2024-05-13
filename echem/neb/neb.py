@@ -12,7 +12,7 @@ import numpy as np
 import logging
 import os
 from typing import Literal, Callable
-logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.DEBUG,
+logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.INFO,
                     format="%(asctime)s %(levelname)8s %(name)14s %(message)s",
                     datefmt='%d/%m/%Y %H:%M:%S')
 
@@ -366,10 +366,7 @@ class NEB_JDFTx:
         self.logger = logging.getLogger(self.__class__.__name__ + ':')
 
     def prepare(self):
-        if self.dE_max is not None:
-            length = len(str(self.nimages + 1))
-        else:
-            length = len(str(self.nimages))
+        length = len(str(self.nimages + 1))
 
         if self.restart is False:
             if self.input_format == 'jdftx':
@@ -395,7 +392,7 @@ class NEB_JDFTx:
             neb.interpolate(method=self.interpolation_method)
 
             for i, image in enumerate(images):
-                image.write(f'start_img{str(i).zfill(length)}.vasp', format='vasp')
+                image.write(f'start_img_{str(i).zfill(length)}.vasp', format='vasp')
 
         else:
             images = []
@@ -403,13 +400,13 @@ class NEB_JDFTx:
                 trj = Trajectory('NEB_trajectory.traj')
                 n_iter = int(len(trj) / (self.nimages + 2))
                 for i in range(self.nimages + 2):
-                    trj[(n_iter - 1) * (self.nimages + 2) + i].write(f'start_img{str(i).zfill(length)}.vasp',
+                    trj[(n_iter - 1) * (self.nimages + 2) + i].write(f'start_img_{str(i).zfill(length)}.vasp',
                                                                      format='vasp')
                 trj.close()
 
             if self.restart == 'from_traj' or self.restart == 'from_vasp':
                 for i in range(self.nimages + 2):
-                    img = read(f'start_img{str(i).zfill(length)}.vasp', format='vasp')
+                    img = read(f'start_img_{str(i).zfill(length)}.vasp', format='vasp')
                     images.append(img)
 
             else:
