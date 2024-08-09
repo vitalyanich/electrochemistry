@@ -902,3 +902,13 @@ class BandProjections:
                 return E_arr - efermi, PDOS_arr
             else:
                 return E_arr, PDOS_arr
+
+
+def VVSHE_2_mu_Ha(V):
+    V_ref = 4.66
+    return - (V_ref + V) * eV2Hartree
+
+
+def mu_Ha_2_VVSHE(mu):
+    V_ref = 4.66
+    return - (mu * Hartree2eV + V_ref)
