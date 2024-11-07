@@ -7,7 +7,7 @@ import typing
 class QEOutput:
     def __init__(self):
         self.patterns = {'nkpts': r'number of k points=\s+([\d]+)',
-                         'kpts_coord': r'k\s*=\s*(-?\d.[\d]+)\s*(-?\d.[\d]+)\s*(-?\d.[\d]+)\s*\([\d]+ PWs\)',
+                         'kpts_coord': r'k\s*=\s*(-?\d.[\d]+)\s*(-?\d.[\d]+)\s*(-?\d.[\d]+)\s*\(\s*[\d]+ PWs\)',
                          'occupations': 'occupation numbers',
                          'efermi': r'the Fermi energy is\s*(-?[\d]+.[\d]+) ev'}
         self.eigenvalues = None
