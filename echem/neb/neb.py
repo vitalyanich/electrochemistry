@@ -1,17 +1,22 @@
 from __future__ import annotations
-from ase.neb import NEB
+from ase.mep.neb import NEB
 from ase.optimize.sciopt import OptimizerConvergenceError
 from ase.io.trajectory import Trajectory, TrajectoryWriter
 from ase.io import read
+from ase.atoms import Atoms
+from ase.calculators.genericfileio import GenericFileIOCalculator
+from ase.calculators.calculator import Calculator
+from ase.calculators.espresso import Espresso, EspressoProfile
 from echem.neb.calculators import JDFTx
 from echem.neb.autoneb import AutoNEB
 from echem.io_data.jdftx import Ionpos, Lattice, Input
+from echem.io_data.qe import Input as QEInput
 from echem.core.useful_funcs import shell
 from pathlib import Path
 import numpy as np
 import logging
 import os
-from typing import Literal, Callable
+from typing import Literal, Callable, Type
 logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.INFO,
                     format="%(asctime)s %(levelname)8s %(name)14s %(message)s",
                     datefmt='%d/%m/%Y %H:%M:%S')
@@ -329,6 +334,197 @@ class NEBOptimizer:
 
         self.logger.warning(f'Step: {step:{length}}. Convergence was not achieved after max iterations = {max_steps}')
         return True
+
+
+class NEB_BaseIO:
+    def __init__(self,
+                 nimages: int = 5,
+                 cNEB: bool = True,
+                 spring_constant: float = 5.0,
+                 interpolation_method: Literal['linear', 'idpp'] = 'idpp',
+                 restart: Literal[False, 'from_traj', 'from_vasp'] = False,
+                 dE_max: float = None):
+        self.nimages_initial = nimages
+        self.cNEB = cNEB
+        self.restart = restart
+        self.spring_constant = spring_constant
+        self.interpolation_method = interpolation_method.lower()
+        self.dE_max = dE_max
+
+        self.path_rundir = Path.cwd()
+        self.optimizer = None
+        self.logger = logging.getLogger(self.__class__.__name__ + ':')
+
+        if dE_max is not None and restart == 'from_traj':
+            raise ValueError('Only restart = "False" or "from_vasp" supported if dE_max is not None')
+
+    @property
+    def nimages(self):
+        if self.optimizer is not None:
+            return len(self.optimizer.neb.images) - 2
+        else:
+            return self.nimages_initial
+
+    def dump_images(self, prefix: str = '',
+                    *,
+                    images: list[Atoms] = None):
+        length = len(str(self.nimages + 1))
+        if images is None and self.optimizer is not None:
+            for i, image in enumerate(self.optimizer.neb.images):
+                image.write(f'{prefix}_{str(i).zfill(length)}.vasp', format='vasp')
+        elif images is not None:
+            for i, image in enumerate(images):
+                image.write(f'{prefix}_{str(i).zfill(length)}.vasp', format='vasp')
+        else:
+            logging.warning('Trying to dump images without optimizer')
+
+    def attach_calculators(self,
+                           calc: Type[Calculator] | Type[GenericFileIOCalculator],
+                           calc_kwargs: dict,
+                           first=False,
+                           last=False):
+        if self.optimizer is not None:
+            length = len(str(self.nimages + 1))
+            for i, image in enumerate(self.optimizer.neb.images[1:-1]):
+                calc_kwargs['directory'] = str(self.path_rundir / str(i+1).zfill(length))
+                image.calc = calc(**calc_kwargs)
+
+            if first:
+                calc_kwargs['directory'] = str(self.path_rundir / str(0).zfill(length))
+                self.optimizer.neb.images[0].calc = calc(**calc_kwargs)
+            if last:
+                calc_kwargs['directory'] = str(self.path_rundir / str(self.nimages + 1).zfill(length))
+                self.optimizer.neb.images[-1].calc = calc(**calc_kwargs)
+        else:
+            logging.warning('Trying to attach calculators without optimizer')
+
+    def neb_from_scratch(self,
+                         initial: Atoms,
+                         final: Atoms):
+        images = [initial]
+        images += [initial.copy() for _ in range(self.nimages_initial)]
+        images += [final]
+
+        neb = NEB(images,
+                  k=self.spring_constant,
+                  climb=self.cNEB)
+        neb.interpolate(method=self.interpolation_method)
+
+        return neb
+
+    def neb_from_vasp(self):
+        images = []
+        length = len(str(self.nimages + 1))
+        for i in range(self.nimages + 2):
+            img = read(f'start_img_{str(i).zfill(length)}.vasp', format='vasp')
+            images.append(img)
+
+        neb = NEB(images,
+                  k=self.spring_constant,
+                  climb=self.cNEB)
+        return neb
+
+    def neb_from_traj(self):
+        trj = Trajectory('NEB_trajectory.traj')
+        n_iter = int(len(trj) / (self.nimages_initial + 2))
+        length = len(str(self.nimages_initial + 1))
+
+        for i in range(self.nimages_initial + 2):
+            trj[(n_iter - 1) * (self.nimages_initial + 2) + i].write(f'start_img_{str(i).zfill(length)}.vasp',
+                                                                     format='vasp')
+        trj.close()
+
+        return self.neb_from_vasp()
+
+    def prepare_base(self,
+                     calc: Type[Calculator] | Type[GenericFileIOCalculator],
+                     **calc_kwargs):
+        if self.restart == 'from_traj':
+            neb = self.neb_from_traj()
+        elif self.restart == 'from_vasp':
+            neb = self.neb_from_vasp()
+        elif self.restart is False:
+            initial = read('init.vasp', format='vasp')
+            final = read('final.vasp', format='vasp')
+            neb = self.neb_from_scratch(initial=initial, final=final)
+            self.dump_images(prefix='start_img', images=neb.images)
+        else:
+            raise ValueError(f'restart must be False or \'from_traj\', '
+                             f'or \'from_vasp\' but you set {self.restart=}')
+
+        length = len(str(self.nimages_initial + 1))
+        for i in range(self.nimages_initial):
+            folder = Path(str(i + 1).zfill(length))
+            folder.mkdir(exist_ok=True)
+
+        if self.dE_max is not None:
+            folder = Path(str(0).zfill(length))
+            folder.mkdir(exist_ok=True)
+            folder = Path(str(self.nimages_initial + 1).zfill(length))
+            folder.mkdir(exist_ok=True)
+
+        self.optimizer = NEBOptimizer(neb=neb,
+                                      trajectory_filepath='NEB_trajectory.traj')
+
+        if self.dE_max is not None:
+            self.attach_calculators(calc, calc_kwargs, first=True, last=True)
+        else:
+            self.attach_calculators(calc, calc_kwargs)
+
+
+class NEB_QE(NEB_BaseIO):
+    def __init__(self,
+                 path_QE_executable: str | Path,
+                 pseudo_dir: str | Path,
+                 input_filepath: str | Path = 'input.in',
+                 nimages: int = 5,
+                 cNEB: bool = True,
+                 spring_constant: float = 5.0,
+                 interpolation_method: Literal['linear', 'idpp'] = 'idpp',
+                 restart: Literal[False, 'from_traj', 'from_vasp'] = False,
+                 dE_max: float = None):
+        super().__init__(nimages, cNEB, spring_constant, interpolation_method, restart, dE_max)
+
+        if type(input_filepath) is str:
+            input_filepath = Path(input_filepath)
+        self.input_filepath = input_filepath
+
+        self.input = QEInput.from_file(input_filepath)
+        self.profile = EspressoProfile(command=path_QE_executable, pseudo_dir=pseudo_dir)
+
+    def prepare(self):
+        self.prepare_base(Espresso,
+                          profile=self.profile,
+                          pseudopotentials=self.input.pseudopotentials,
+                          input_data=self.input.params,
+                          kpts=self.input.kpts,
+                          koffset=self.input.koffset,
+                          additional_cards=self.input.additional_cards)
+
+    def run(self,
+            fmax: float = 0.1,
+            method: Literal['ode', 'static'] = 'ode',
+            max_steps: int = 100):
+        self.prepare()
+
+        if self.dE_max is not None:
+            def calc_fn(folder_name) -> Espresso:
+
+                return Espresso(profile=self.profile,
+                                pseudopotentials=self.input.pseudopotentials,
+                                input_data=self.input.params,
+                                kpts=self.input.kpts,
+                                koffset=self.input.koffset,
+                                additional_cards=self.input.additional_cards,
+                                folder=self.path_rundir / folder_name)
+        else:
+            calc_fn = None
+        if method == 'ode':
+            self.optimizer.run_ode(fmax, max_steps)
+        elif method == 'static':
+            self.optimizer.run_static(fmax, max_steps, dE_max=self.dE_max, construct_calc_fn=calc_fn)
+        else:
+            raise ValueError(f'Method must be "ode" or "static" but you set {method=}')
 
 
 class NEB_JDFTx:
