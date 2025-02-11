@@ -8,6 +8,15 @@ from echem.core.useful_funcs import is_int, is_float
 import re
 
 
+def to_bool(string: str):
+    if string.strip('.').lower() == 'true':
+        return True
+    elif string.strip('.').lower() == 'false':
+        return False
+    else:
+        return string
+
+
 class Input:
     def __init__(self,
                  atoms: Atoms = None,
@@ -75,6 +84,7 @@ class Input:
                     val = float(val)
                 else:
                     val = val.strip('\'').strip('\"')
+                    val = to_bool(val)
                 subparams[key] = val
                 continue
 
