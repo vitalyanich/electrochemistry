@@ -1,7 +1,124 @@
 import numpy as np
 from monty.re import regrep
 import itertools
-import typing
+from pathlib import Path
+from ase.atoms import Atoms
+from ase.io.espresso import read_espresso_in
+from echem.core.useful_funcs import is_int, is_float
+import re
+
+
+class Input:
+    def __init__(self,
+                 atoms: Atoms = None,
+                 params: dict = None,
+                 kpts: set = None,
+                 koffset: set = None,
+                 pseudopotentials: dict[str, str] = None,
+                 additional_cards: list[str] = None):
+        self.atoms = atoms
+        self.params = params
+        self.kpts = kpts
+        self.koffset = koffset
+        self.pseudopotentials = pseudopotentials
+        self.additional_cards = additional_cards
+
+    @staticmethod
+    def __strip_lines(data: list[str]):
+        new_data = []
+        for line in data:
+            line = re.sub('!.*', '', line)
+            line = line.strip('\n').strip(',').strip()
+            if line == '':
+                continue
+
+            if ',' in line:
+                for line in line.split(','):
+                    new_data.append(line)
+            else:
+                new_data.append(line)
+
+        return new_data
+
+    @staticmethod
+    def from_file(filepath: str | Path):
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
+        file = open(filepath, 'r')
+        data = file.readlines()
+        file.close()
+        data = Input.__strip_lines(data)
+
+        params = {}
+        subparams = {}
+        namelist = None
+        matches = {}
+
+        for i, line in enumerate(data):
+            if line.startswith('&'):
+                namelist = line.strip('&').upper()
+                continue
+            elif line == '/':
+                params[namelist] = subparams
+                namelist = None
+                subparams = {}
+                continue
+
+            if namelist is not None:
+                key, val = line.split('=')
+                key = key.strip()
+                val = val.strip()
+                if is_int(val):
+                    val = int(val)
+                elif is_float(val):
+                    val = float(val)
+                else:
+                    val = val.strip('\'').strip('\"')
+                subparams[key] = val
+                continue
+
+            if line.startswith('K_POINTS'):
+                matches['kpoints'] = i
+            elif line.startswith('ATOMIC_SPECIES'):
+                matches['species'] = i
+            elif line.startswith('SOLVENTS'):
+                matches['solvents'] = i
+
+        if 'kpoints' in matches.keys():
+            i = matches['kpoints']
+            tag = data[i].split()[1]
+            if tag == 'gamma':
+                kpts = None
+                koffset = None
+            elif tag == 'automatic':
+                k1, k2, k3, s1, s2, s3 = [int(_) for _ in data[i + 1].split()]
+                kpts = (k1, k2, k3)
+                koffset = (s1, s2, s3)
+            else:
+                raise NotImplemented('Only K_POINTS == "automatic" or "gamma" is supported')
+
+        if 'species' in matches.keys():
+            nspecies = int(params['SYSTEM']['ntyp'])
+            pseudopotentials = {}
+            for i in range(nspecies):
+                line_splitted = data[matches['species'] + 1 + i].split()
+                pseudopotentials[line_splitted[0]] = line_splitted[2]
+        else:
+            pseudopotentials = None
+
+        if 'solvents' in matches.keys():
+            nsolvs = int(params['RISM']['nsolv'])
+            additional_cards = [data[matches['solvents'] + i] for i in range(nsolvs + 1)]
+        else:
+            additional_cards = None
+
+        try:
+            atoms = read_espresso_in(filepath)
+        except TypeError:
+            atoms = None
+
+        return Input(atoms, params, kpts, koffset, pseudopotentials, additional_cards)
 
 
 class QEOutput:
@@ -15,11 +132,6 @@ class QEOutput:
         self.occupations = None
         self.efermi = None
         self.nkpt = None
-
-    @staticmethod
-    def _GaussianSmearing(x, x0, sigma):
-        """Simulate the Delta function by a Gaussian shape function"""
-        return 1 / (np.sqrt(2 * np.pi) * sigma) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
     def from_file(self, filepath):
         matches = regrep(filepath, self.patterns)
@@ -50,80 +162,3 @@ class QEOutput:
         for i in range(self.nkpt):
             weights[i] = file_data[matches['nkpts'][0][1]+2+i].split()[-1]
         self.weights = weights
-
-    def get_band_eigs(self, bands):
-        if type(bands) is int:
-            return np.array([eig for eig in self.eigenvalues[:, bands]])
-        elif isinstance(bands, typing.Iterable):
-            return np.array([[eig for eig in self.eigenvalues[:, band]] for band in bands])
-        else:
-            raise ValueError('Variable bands should be int or iterable')
-
-    def get_band_occ(self, bands):
-        if type(bands) is int:
-            return [occ for occ in self.occupations[:, bands]]
-        elif isinstance(bands, typing.Iterable):
-            return np.array([[occ for occ in self.occupations[:, band]] for band in bands])
-        else:
-            raise ValueError('Variable bands should be int or iterable')
-
-    def get_DOS(self, **kwargs):
-        """Calculate Density of States based on eigenvalues and its weights
-
-        Args:
-            dE (float): step of energy array in function output
-            zero_at_fermi (bool, optional): if True Fermi energy will be equal to zero
-            sm_param (dict, optional): parameters for smooth DOS.
-                E_min (float, str): minimum value in DOS calculation. If E_min == 'min' left border of energy
-                is equal to the minimum eigenvalue
-                E_max (float, str): maximum value in DOS calculation. If E_max == 'max' right border of energy
-                is equal to the maximum eigenvalue
-                bw_method (float): The method used to calculate the estimator bandwidth. This can be 'scott',
-                'silverman', a scalar constant or a callable. If a scalar, this will be used directly as `kde.factor`.
-                If a callable, it should take a `gaussian_kde` instance as only parameter and return a scalar.
-                If None (default), 'scott' is used.
-                nelec (int): Number of electrons in the system. DOS integral to efermi should be equal to the nelec
-
-        Returns:
-            E, DOS - Two 1D np.arrays that contain energy and according DOS values
-        """
-        if 'zero_at_fermi' in kwargs:
-            zero_at_fermi = kwargs['zero_at_fermi']
-        else:
-            zero_at_fermi = False
-
-        if 'dE' in kwargs:
-            dE = kwargs['dE']
-        else:
-            dE = 0.01
-
-        if 'smearing' in kwargs:
-            smearing = kwargs['smearing']
-        else:
-            smearing = 'Gaussian'
-
-        if smearing == 'Gaussian':
-            if 'sigma' in kwargs:
-                sigma = kwargs['sigma']
-            else:
-                sigma = 0.02
-            if 'emin' in kwargs:
-                E_min = kwargs['emin']
-            else:
-                E_min = np.min(self.eigenvalues)
-            if 'emax' in kwargs:
-                E_max = kwargs['emax']
-            else:
-                E_max = np.max(self.eigenvalues)
-            E_arr = np.arange(E_min, E_max, dE)
-
-        DOS_arr = np.zeros_like(E_arr)
-        for energy_kpt, weight in zip(self.eigenvalues, self.weights):
-            for energy in energy_kpt:
-                DOS_arr += weight * self._GaussianSmearing(E_arr, energy, sigma)
-                # 2 is not used because sum(weights) = 2
-
-        if zero_at_fermi:
-            return E_arr - self.efermi, DOS_arr
-        else:
-            return E_arr, DOS_arr
