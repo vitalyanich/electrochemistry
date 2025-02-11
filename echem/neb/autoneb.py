@@ -12,14 +12,13 @@ from math import log
 from math import exp
 from contextlib import ExitStack
 from pathlib import Path
-from warnings import warn
 
 from ase.io import Trajectory
 from ase.io import read
 from ase.neb import NEB
 from ase.optimize import BFGS
 from ase.optimize import FIRE
-from ase.neb import NEBOptimizer
+from ase.mep.neb import NEBOptimizer
 from ase.calculators.singlepoint import SinglePointCalculator
 import ase.parallel as mpi
 
@@ -633,9 +632,9 @@ def store_E_and_F_in_spc(self):
         energy = np.empty(1)
         forces = np.empty((self.natoms, 3))
 
-        for i in range(1, self.nimages - 1):
+        for i in range(1, self.nimages_initial - 1):
             # Determine which node is the leading for image i
-            root = (i - 1) * self.world.size // (self.nimages - 2)
+            root = (i - 1) * self.world.size // (self.nimages_initial - 2)
             # If on this node, extract the calculated numbers
             if self.world.rank == root:
                 forces = images[i].get_forces()

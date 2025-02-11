@@ -1,7 +1,7 @@
 from __future__ import annotations
 import tempfile
 import numpy as np
-from ase.calculators.interface import Calculator
+from ase.calculators.calculator import Calculator
 from echem.core.constants import Hartree2eV, Angstrom2Bohr, Bohr2Angstrom
 from echem.core.useful_funcs import shell
 from pathlib import Path
