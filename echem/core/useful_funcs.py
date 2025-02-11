@@ -17,6 +17,25 @@ def nearest_array_index(array, value):
     return (np.abs(array - value)).argmin()
 
 
+def is_float(element: any) -> bool:
+    if element is None:
+        return False
+    try:
+        float(element)
+        return True
+    except ValueError:
+        return False
+
+
+def is_int(element: any) -> bool:
+    if element is None:
+        return False
+    try:
+        int(element)
+        return True
+    except ValueError:
+        return False
+
 def shell(cmd) -> str:
     '''
     Run shell command and return output as a string
