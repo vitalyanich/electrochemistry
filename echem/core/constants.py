@@ -15,8 +15,12 @@ ElemName2Num = {v: k for k, v in zip(ElemNum2Name.keys(), ElemNum2Name.values())
 
 Bohr2Angstrom = 0.529177
 Angstrom2Bohr = 1 / Bohr2Angstrom
+
 Hartree2eV = 27.2114
 eV2Hartree = 1 / Hartree2eV
+Rydberg2eV = 13.605703976
+eV2Rydberg = 1 / Rydberg2eV
+
 THz2eV = 4.136e-3
 eV2THz = 1 / THz2eV
 amu2kg = 1.6605402e-27
