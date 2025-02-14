@@ -6,6 +6,7 @@ from echem.core.constants import Hartree2eV, Angstrom2Bohr, Bohr2Angstrom
 from echem.core.useful_funcs import shell
 from pathlib import Path
 import logging
+from ase.calculators.espresso import Espresso as Espresso_ASE
 
 
 # Atomistic Simulation Environment (ASE) calculator interface for JDFTx
@@ -217,3 +218,17 @@ class JDFTx(Calculator):
         self.lastInput = list(self.input)
 
         return inputfile
+
+
+class Espresso(Espresso_ASE):
+    def __init__(self, *args, **kwargs):
+        self.logger = logging.getLogger(self.__class__.__name__ + ':')
+        self.global_step = None
+        super().__init__(*args, **kwargs)
+
+    def calculate(self, *args, **kwargs):
+        if self.global_step is not None:
+            self.logger.info(f'Step: {self.global_step:2}. Run in {self.directory}')
+        else:
+            self.logger.info(f'Run in {self.directory}')
+        super().calculate(*args, **kwargs)
