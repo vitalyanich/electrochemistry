@@ -6,8 +6,8 @@ from ase.io import read
 from ase.atoms import Atoms
 from ase.calculators.genericfileio import GenericFileIOCalculator
 from ase.calculators.calculator import Calculator
-from ase.calculators.espresso import Espresso, EspressoProfile
-from echem.neb.calculators import JDFTx
+from ase.calculators.espresso import EspressoProfile
+from echem.neb.calculators import JDFTx, Espresso
 from echem.neb.autoneb import AutoNEB
 from echem.io_data.jdftx import Ionpos, Lattice, Input
 from echem.io_data.qe import Input as QEInput
@@ -17,7 +17,7 @@ import numpy as np
 import logging
 import os
 from typing import Literal, Callable, Type
-logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.INFO,
+logging.basicConfig(filename='logfile_NEB.log', filemode='a', level=logging.DEBUG,
                     format="%(asctime)s %(levelname)8s %(name)14s %(message)s",
                     datefmt='%d/%m/%Y %H:%M:%S')
 
@@ -53,13 +53,13 @@ class NEBOptimizer:
 
     def get_energies(self, first: bool = False, last: bool = False):
         if not first and not last:
-            return [image.calc.E for image in self.neb.images[1:-1]]
+            return [image.calc.get_potential_energy() for image in self.neb.images[1:-1]]
         elif first and not last:
-            return [image.calc.E for image in self.neb.images[:-1]]
+            return [image.calc.get_potential_energy() for image in self.neb.images[:-1]]
         elif not first and last:
-            return [image.calc.E for image in self.neb.images[1:]]
+            return [image.calc.get_potential_energy() for image in self.neb.images[1:]]
         elif first and last:
-            return [image.calc.E for image in self.neb.images]
+            return [image.calc.get_potential_energy() for image in self.neb.images]
 
     def dump_trajectory(self):
         if self.trj_writer is not None:
@@ -177,7 +177,7 @@ class NEBOptimizer:
                             self.logger.debug(f'Trying to attach the calc to {k} image '
                                               f'with the length: {len(str(len(self.neb.images)))}')
                             image.calc = construct_calc_fn(str(k).zfill(zfill_length))
-                            image.calc.E = energies[k]
+                            #image.calc.E = energies[k]
 
                         if length_prev != length_new:
                             self.logger.debug('Trying to rename due to the change in length')
@@ -207,7 +207,7 @@ class NEBOptimizer:
 
     def run_ode(self,
                 fmax: float = 0.1,
-                max_steps: int = 100,
+                max_steps: int = 99,
                 C1: float = 1e-2,
                 C2: float = 2.0,
                 extrapolation_scheme: Literal[1, 2, 3] = 3,
@@ -279,7 +279,7 @@ class NEBOptimizer:
             condition_2 = R_new <= R * C2
             condition_3 = err <= rtol
             accept = condition_1 or (condition_2 and condition_3)
-            self.logger.info(f'Step: {step:{length}}. {"R_new <= R * (1 - C1 * h)":26} \t is {condition_1}')
+            self.logger.info(f'Step: {step:{length}}. {"R_new <= R * (1 - C1 * h)":26} is {condition_1}')
             self.logger.info(f'Step: {step:{length}}. {"R_new <= R * C2":26} is {condition_2}')
             self.logger.info(f'Step: {step:{length}}. {"err <= rtol":26} is {condition_3}')
 
