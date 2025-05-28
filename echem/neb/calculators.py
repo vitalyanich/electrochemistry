@@ -7,6 +7,7 @@ from echem.core.useful_funcs import shell
 from pathlib import Path
 import logging
 from ase.calculators.espresso import Espresso as Espresso_ASE
+from dftd4.ase import DFTD4 as DFTD4_ASE
 
 
 # Atomistic Simulation Environment (ASE) calculator interface for JDFTx
@@ -228,7 +229,32 @@ class Espresso(Espresso_ASE):
 
     def calculate(self, *args, **kwargs):
         if self.global_step is not None:
-            self.logger.info(f'Step: {self.global_step:2}. Run in {self.directory}')
+            self.logger.info(f'Step: {self.global_step:2}. Run in \'{self.directory}\'')
         else:
-            self.logger.info(f'Run in {self.directory}')
+            self.logger.info(f'Run in \'{self.directory}\'')
+
         super().calculate(*args, **kwargs)
+
+        if self.global_step is not None:
+            self.logger.info(f'Step: {self.global_step:2}. E = {self.get_potential_energy():.6f}')
+        else:
+            self.logger.info(f'E = {self.get_potential_energy()}')
+
+
+def add_dftd4(calc, method='PBE'):
+    return DFTD4(method=method).add_calculator(calc)
+
+
+class DFTD4(DFTD4_ASE):
+    def __init__(self, *args, **kwargs):
+        self.logger = logging.getLogger(self.__class__.__name__ + ':')
+        self.global_step = None
+        super().__init__(*args, **kwargs)
+
+    def calculate(self, *args, **kwargs):
+        super().calculate(*args, **kwargs)
+
+        if self.global_step is not None:
+            self.logger.info(f'Step: {self.global_step:2}. E = {self.get_potential_energy():.6f}')
+        else:
+            self.logger.info(f'E = {self.get_potential_energy()}')
