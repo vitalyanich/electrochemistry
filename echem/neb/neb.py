@@ -474,8 +474,7 @@ class NEB_BaseIO:
 
 class NEB_QE(NEB_BaseIO):
     def __init__(self,
-                 path_QE_executable: str | Path,
-                 pseudo_dir: str | Path,
+                 command_to_run_QE: str | Path,
                  input_filepath: str | Path = 'input.in',
                  nimages: int = 5,
                  cNEB: bool = True,
@@ -490,7 +489,8 @@ class NEB_QE(NEB_BaseIO):
         self.input_filepath = input_filepath
 
         self.input = QEInput.from_file(input_filepath)
-        self.profile = EspressoProfile(command=path_QE_executable, pseudo_dir=pseudo_dir)
+        self.profile = EspressoProfile(command=command_to_run_QE,
+                                       pseudo_dir=self.input.params['control']['pseudo_dir'])
 
     def prepare(self):
         self.prepare_base(Espresso,
