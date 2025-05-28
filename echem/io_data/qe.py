@@ -8,15 +8,6 @@ from echem.core.useful_funcs import is_int, is_float
 import re
 
 
-def to_bool(string: str):
-    if string.strip('.').lower() == 'true':
-        return True
-    elif string.strip('.').lower() == 'false':
-        return False
-    else:
-        return string
-
-
 class Input:
     def __init__(self,
                  atoms: Atoms = None,
@@ -50,6 +41,15 @@ class Input:
         return new_data
 
     @staticmethod
+    def __to_bool(string: str):
+        if string.strip('.').lower() == 'true':
+            return True
+        elif string.strip('.').lower() == 'false':
+            return False
+        else:
+            return string
+
+    @staticmethod
     def from_file(filepath: str | Path):
         if isinstance(filepath, str):
             filepath = Path(filepath)
@@ -66,7 +66,7 @@ class Input:
 
         for i, line in enumerate(data):
             if line.startswith('&'):
-                namelist = line.strip('&').upper()
+                namelist = line.strip('&').lower()
                 continue
             elif line == '/':
                 params[namelist] = subparams
@@ -84,7 +84,7 @@ class Input:
                     val = float(val)
                 else:
                     val = val.strip('\'').strip('\"')
-                    val = to_bool(val)
+                    val = Input.__to_bool(val)
                 subparams[key] = val
                 continue
 
@@ -109,7 +109,7 @@ class Input:
                 raise NotImplemented('Only K_POINTS == "automatic" or "gamma" is supported')
 
         if 'species' in matches.keys():
-            nspecies = int(params['SYSTEM']['ntyp'])
+            nspecies = int(params['system']['ntyp'])
             pseudopotentials = {}
             for i in range(nspecies):
                 line_splitted = data[matches['species'] + 1 + i].split()
@@ -118,7 +118,7 @@ class Input:
             pseudopotentials = None
 
         if 'solvents' in matches.keys():
-            nsolvs = int(params['RISM']['nsolv'])
+            nsolvs = int(params['rism']['nsolv'])
             additional_cards = [data[matches['solvents'] + i] for i in range(nsolvs + 1)]
         else:
             additional_cards = None
