@@ -183,7 +183,7 @@ class InfoExtractor:
 
         with tqdm(total=len(subfolders)) as pbar:
             with ThreadPoolExecutor(num_workers) as executor:
-                for _ in executor.map(self.extract_info, subfolders, [recreate_files] * len(subfolders), \
+                for _ in executor.map(self.extract_info, subfolders, [recreate_files] * len(subfolders),
                                       [parse_folders_names] * len(subfolders)):
                     pbar.update()
 

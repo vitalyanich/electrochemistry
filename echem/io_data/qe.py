@@ -6,6 +6,7 @@ from ase.atoms import Atoms
 from ase.io.espresso import read_espresso_in
 from echem.core.useful_funcs import is_int, is_float
 import re
+from nptyping import NDArray, Shape, Number
 
 
 class Input:
@@ -172,3 +173,44 @@ class QEOutput:
         for i in range(self.nkpt):
             weights[i] = file_data[matches['nkpts'][0][1]+2+i].split()[-1]
         self.weights = weights
+
+
+class BandsOut:
+    def __init__(self,
+                 coords: NDArray[Shape['Nkpts, 3'], Number],
+                 eigenvalues: NDArray[Shape['Nkpts, Nbands'], Number]):
+        self.coords = coords
+        self.eigenvalues = eigenvalues
+
+    @staticmethod
+    def from_file(filepath: str | Path):
+        if isinstance(filepath, str):
+            filepath = Path(filepath)
+
+        file = open(filepath, 'r')
+        data = file.readlines()
+        file.close()
+
+        nbands = int(re.findall(r'nbnd\s*=\s*(\d+)', data[0])[0])
+        nkpts = int(re.findall(r'nks\s*=\s*(\d+)', data[0])[0])
+        nspin = 1
+
+        x, y = divmod(nbands, 10)
+        if y == 0:
+            nstr_eigs = x
+        else:
+            nstr_eigs = x + 1
+
+        coords = np.zeros((nkpts, 3))
+        lines_coords = range(1, nkpts * (nstr_eigs + 1), nstr_eigs + 1)
+        for i, n_line in enumerate(lines_coords):
+            coords[i] = [float(j) for j in data[n_line].split()]
+
+        eigenvalues = np.zeros((nspin, nkpts, nbands))
+        lines_eigs = range(2, nkpts * (nstr_eigs + 1), nstr_eigs + 1)
+        for i, n_line in enumerate(lines_eigs):
+            eigs = [line.strip().split() for line in data[n_line: n_line + nstr_eigs]]
+            eigs = list(itertools.chain(*eigs))
+            eigenvalues[0, i] = eigs
+
+        return BandsOut(coords, eigenvalues)
