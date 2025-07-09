@@ -214,3 +214,113 @@ class BandsOut:
             eigenvalues[0, i] = eigs
 
         return BandsOut(coords, eigenvalues)
+
+
+class ProjWFC_out:
+    def __init__(self, atomic_states, projections):
+        self.atomic_states = atomic_states
+        self.projections = projections
+
+    @staticmethod
+    def from_file(filepath):
+        patterns = {'eigenvalues': r'====\se\(\s*\d+\)\s=\s*(\S+)\seV\s====',
+                    'psi': r'psi\s+=\s+',
+                    'psi2': r'\|psi\|\^2',
+                    'nbands': r'nbnd\s+=\s+(\d+)',
+                    'natomwfc': r'natomwfc\s+=\s+(\d+)',
+                    'atomic_states': r'atom\s+(\d+)\s+\(([a-zA-Z0-9]+)\s*\)\,\s+wfc\s+(\d+)\s*\(l=(\d+)\s*m=\s*(\d+)\)'}
+
+        matches = regrep(str(filepath), patterns)
+
+        nbands = int(matches['nbands'][0][0][0])
+        natomwfc = int(matches['natomwfc'][0][0][0])
+
+        eigenvalues = [i[0][0] for i in matches['eigenvalues']]
+        eigenvalues = np.array(eigenvalues).reshape(-1, nbands)
+
+        nkpts = eigenvalues.shape[0]
+
+        atomic_states = [[int(i[0][0]) - 1, i[0][1], int(i[0][3]), int(i[0][4])] for i in matches['atomic_states']]
+
+        file = open(filepath, 'r')
+        data = file.readlines()
+        file.close()
+
+        projections = np.zeros((nkpts * nbands, natomwfc))
+        psis = [i[1] for i in matches['psi']]
+        psi2s = [i[1] for i in matches['psi2']]
+        for i, (psi, psi2) in enumerate(zip(psis, psi2s)):
+            for j in range(psi, psi2):
+                coeffs = re.findall(r'([.\d]+)\*\[#\s*(\d+)\]', data[j])
+                for coef, atomband in zip([float(l[0]) for l in coeffs],
+                                          [int(l[1]) for l in coeffs]):
+                    projections[i, atomband - 1] = coef
+
+        projections = projections.reshape(nkpts, nbands, natomwfc)
+
+        return ProjWFC_out(atomic_states, projections)
+
+    @property
+    def nkpts(self):
+        return self.projections.shape[0]
+
+    @property
+    def nbands(self):
+        return self.projections.shape[1]
+
+    @property
+    def natomwfc(self):
+        return self.projections.shape[2]
+
+    @property
+    def species(self):
+        return [i[1] for i in self.atomic_states]
+
+    @staticmethod
+    def __in_atom_numbers(s, atom_numbers):
+        if atom_numbers is None:
+            return True
+        else:
+            return s[0] in atom_numbers
+
+    @staticmethod
+    def __in_species(s, species):
+        if species is None:
+            return True
+        else:
+            return s[1] in species
+
+    @staticmethod
+    def __in_ls(s, ls):
+        if ls is None:
+            return True
+        else:
+            return s[2] in ls
+
+    @staticmethod
+    def __in_ms(s, ms):
+        if ms is None:
+            return True
+        else:
+            return s[3] in ms
+
+    def select_atomic_states(self,
+                             atom_numbers=None,
+                             species=None,
+                             ls=None,
+                             ms=None):
+        if isinstance(atom_numbers, int):
+            atom_numbers = [atom_numbers]
+        if isinstance(species, str):
+            species = [species]
+        if isinstance(ls, int):
+            ls = [ls]
+        if isinstance(ms, int):
+            ms = [ms]
+
+        return [i for i, s in enumerate(self.atomic_states) if
+                self.__in_atom_numbers(s, atom_numbers) and
+                self.__in_species(s, species) and
+                self.__in_ls(s, ls) and
+                self.__in_ms(s, ms)]
+
