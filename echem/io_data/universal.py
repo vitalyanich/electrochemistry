@@ -171,15 +171,6 @@ class Cube:
 
             return Cube(data, structure, origin, units, comment, charges, dset_ids)
 
-    #def reduce(self, factor):
-    #    from skimage.measure import block_reduce
-    #    try:
-    #        volumetric_data_reduced = block_reduce(self.volumetric_data, block_size=(factor, factor, factor), func=np.mean)
-    #        Ns_reduced = np.shape(volumetric_data_reduced)
-    #    except:
-    #        raise ValueError('Try another factor value')
-    #    return Cube(volumetric_data_reduced, self.structure, self.comment, Ns_reduced, self.charges)
-
     def to_file(self, filepath, units='Bohr'):
         if not self.structure.coords_are_cartesian:
             self.structure.mod_coords_to_cartesian()
@@ -260,7 +251,7 @@ class Cube:
         self.structure.coords -= self.origin
         self.origin = np.zeros(3)
 
-    def get_average_along_axis(self, axis):
+    def get_average_along_axis(self, axis, return_coords=False, units='Angstrom'):
         """
         Gets average value along axis
         Args:
@@ -272,32 +263,17 @@ class Cube:
         Returns:
             np.array of average value along selected axis
         """
-        if axis == 2:
-            return np.mean(self.volumetric_data, (0, 1))
-        elif axis == 1:
-            return np.mean(self.volumetric_data, (0, 2))
-        elif axis == 0:
-            return np.mean(self.volumetric_data, (1, 2))
+        axes = [0, 1, 2]
+        axes.remove(axis)
+        axes = tuple(axes)
+
+        if return_coords:
+            return (np.linspace(0,
+                                np.linalg.norm(self.structure.lattice[axis]),
+                                self.volumetric_data.shape[axis]),
+                    np.mean(self.volumetric_data, axis=axes))
         else:
-            raise ValueError('axis can be only 0, 1 or 2')
-
-    def get_average_along_axis_max(self, axis: int, scale=None):
-        """Calculate the vacuum level (the maximum planar average value along selected axis)
-
-        Args:
-            axis (int): The axis number along which the planar average is calculated. The first axis is 0
-            scale (float): The value that is multiplying by the result. It's used for converting between
-                different units
-
-        Returns:
-            (float): The vacuum level multiplied by scale factor
-
-        """
-        avr = self.get_average_along_axis(axis)
-        if scale is None:
-            return np.max(avr)
-        else:
-            return scale * np.max(avr)
+            return np.mean(self.volumetric_data, axis=axes)
 
     def get_voxel(self, units='Angstrom'):
         NX, NY, NZ = self.volumetric_data.shape
